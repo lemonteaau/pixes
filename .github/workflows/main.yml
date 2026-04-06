@@ -1,22 +1,46 @@
 name: Build ALL
 run-name: Build ALL
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      build_macos:
+        description: Build macOS
+        type: boolean
+        default: true
+      build_ios:
+        description: Build iOS
+        type: boolean
+        default: true
+      build_android:
+        description: Build Android
+        type: boolean
+        default: true
+      build_windows:
+        description: Build Windows
+        type: boolean
+        default: true
+      build_linux:
+        description: Build Linux (x64)
+        type: boolean
+        default: true
+      build_linux_arm64:
+        description: Build Linux (ARM64)
+        type: boolean
+        default: true
   release:
     types: [published]
 
 jobs:
   Build_MacOS:
-    runs-on: macos-26
+    if: github.event_name == 'release' || github.event.inputs.build_macos == 'true'
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v3
       - uses: subosito/flutter-action@v2
         with:
           channel: "stable"
           flutter-version-file: pubspec.yaml
-      - run: | 
-          sudo xcode-select --switch /Applications/Xcode_26.4.0.app
-          sudo xcodebuild -downloadComponent MetalToolchain
+      - run: sudo xcode-select --switch /Applications/Xcode_16.4.0.app
       - run: flutter pub get
         # Step 1: Decode and install the certificate
       - name: Decode and install certificate
@@ -26,9 +50,6 @@ jobs:
         run: |
           echo "$CERTIFICATE" | base64 --decode > signing_certificate.p12
           security import signing_certificate.p12 -k ~/Library/Keychains/login.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-
-      - name: Check rust-toolchain.toml
-        run: rustup show
 
       # Step 2: Build the Flutter macOS app
       - name: Build Flutter macOS App
@@ -56,6 +77,7 @@ jobs:
           name: macos_build
           path: result/
   Build_IOS:
+    if: github.event_name == 'release' || github.event.inputs.build_ios == 'true'
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
@@ -76,6 +98,7 @@ jobs:
           name: app-ios.ipa
           path: /Users/runner/work/pixes/pixes/build/ios/iphoneos/pixes-ios.ipa
   Build_Android:
+    if: github.event_name == 'release' || github.event.inputs.build_android == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -102,6 +125,7 @@ jobs:
           name: apks
           path: build/app/outputs/apk/release
   Build_Windows:
+    if: github.event_name == 'release' || github.event.inputs.build_windows == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -130,6 +154,7 @@ jobs:
           name: windows_build
           path: build/windows/x64/runner/Release/pixes.msix
   Build_Linux:
+    if: github.event_name == 'release' || github.event.inputs.build_linux == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -158,6 +183,7 @@ jobs:
           name: arch_build
           path: build/linux/arch/
   Build_Linux_ARM64:
+    if: github.event_name == 'release' || github.event.inputs.build_linux_arm64 == 'true'
     runs-on: ubuntu-22.04-arm
     steps:
       - uses: actions/checkout@v4
