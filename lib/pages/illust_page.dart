@@ -370,6 +370,7 @@ class _IllustPageState extends State<IllustPage> {
         height: _kBottomBarHeight + context.padding.bottom,
       );
     }
+    height -= _kBottomBarHeight + context.padding.bottom;
     var imageWidth = width;
     var imageHeight = widget.illust.height * width / widget.illust.width;
     if (imageHeight > height) {
