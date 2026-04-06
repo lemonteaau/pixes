@@ -353,12 +353,69 @@ class _IllustPageState extends State<IllustPage> {
     ImagePage.show(images, initialPage: index);
   }
 
+  Widget buildHeader() {
+    return Column(
+      children: [
+        Text(
+          widget.illust.title,
+          style: const TextStyle(fontSize: 24),
+        ).paddingVertical(8).paddingHorizontal(12).toAlign(Alignment.centerLeft),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            const Icon(FluentIcons.view, size: 14),
+            const SizedBox(width: 4),
+            Text(
+              widget.illust.totalView.toString(),
+              style: const TextStyle(fontSize: 12),
+            ),
+            const SizedBox(width: 8),
+            const Icon(FluentIcons.six_point_star, size: 14),
+            const SizedBox(width: 4),
+            Text(
+              widget.illust.totalBookmarks.toString(),
+              style: const TextStyle(fontSize: 12),
+            ),
+          ],
+        ).paddingHorizontal(12),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: widget.illust.tags.map((e) {
+              var text = e.name;
+              if (e.translatedName != null && e.name != e.translatedName) {
+                text += "/${e.translatedName}";
+              }
+              return MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () {
+                    context.to(() => SearchResultPage(e.name));
+                  },
+                  child: Card(
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                    child: Text(
+                      text,
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ).paddingHorizontal(10).paddingBottom(8),
+      ],
+    ).paddingAll(4);
+  }
+
   Widget buildImage(double width, double height, int index) {
     if (index == 0) {
-      return Text(
-        widget.illust.title,
-        style: const TextStyle(fontSize: 24),
-      ).paddingVertical(8).paddingHorizontal(12);
+      return buildHeader();
     }
     index--;
     File? downloadFile;
@@ -630,8 +687,6 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     buildTop(),
-                    buildStats(),
-                    buildTags(),
                     buildMoreActions(),
                     SelectableText(
                       "${"Artwork ID".tl}: ${widget.illust.id}\n"
@@ -932,130 +987,6 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
         ),
       ),
     );
-  }
-
-  Widget buildStats() {
-    return SizedBox(
-      height: 56,
-      child: Row(
-        children: [
-          const SizedBox(
-            width: 2,
-          ),
-          Expanded(
-            child: Container(
-              height: 52,
-              decoration: BoxDecoration(
-                  border: Border.all(
-                      color: ColorScheme.of(context).outlineVariant,
-                      width: 0.6),
-                  borderRadius: BorderRadius.circular(4)),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: Row(
-                children: [
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        FluentIcons.view,
-                        size: 20,
-                      ),
-                      Text(
-                        "Views".tl,
-                        style: const TextStyle(fontSize: 12),
-                      )
-                    ],
-                  ),
-                  const SizedBox(
-                    width: 12,
-                  ),
-                  Text(
-                    widget.illust.totalView.toString(),
-                    style: TextStyle(
-                        color: ColorScheme.of(context).primary,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 18),
-                  )
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(
-            width: 16,
-          ),
-          Expanded(
-              child: Container(
-            height: 52,
-            decoration: BoxDecoration(
-                border: Border.all(
-                    color: ColorScheme.of(context).outlineVariant, width: 0.6),
-                borderRadius: BorderRadius.circular(4)),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            child: Row(
-              children: [
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      FluentIcons.six_point_star,
-                      size: 20,
-                    ),
-                    Text(
-                      "Favorites".tl,
-                      style: const TextStyle(fontSize: 12),
-                    )
-                  ],
-                ),
-                const SizedBox(
-                  width: 12,
-                ),
-                Text(
-                  widget.illust.totalBookmarks.toString(),
-                  style: TextStyle(
-                      color: ColorScheme.of(context).primary,
-                      fontWeight: FontWeight.w500,
-                      fontSize: 18),
-                )
-              ],
-            ),
-          )),
-          const SizedBox(
-            width: 2,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget buildTags() {
-    return SizedBox(
-      width: double.infinity,
-      child: Wrap(
-        spacing: 4,
-        runSpacing: 4,
-        children: widget.illust.tags.map((e) {
-          var text = e.name;
-          if (e.translatedName != null && e.name != e.translatedName) {
-            text += "/${e.translatedName}";
-          }
-          return MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () {
-                context.to(() => SearchResultPage(e.name));
-              },
-              child: Card(
-                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
-                child: Text(
-                  text,
-                  style: const TextStyle(fontSize: 13),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    ).paddingVertical(8).paddingHorizontal(2);
   }
 
   Widget buildMoreActions() {
