@@ -9,7 +9,7 @@ List<Illust> checkIllusts(List<Illust> illusts) {
     if (appdata.settings["blockTags"] == null) {
       return false;
     }
-    if (appdata.settings["blockTags"].contains("user:${illust.author.name}")) {
+    if (appdata.settings["blockTags"].contains("user:${illust.author.id}")) {
       return true;
     }
     for (var tag in illust.tags) {
