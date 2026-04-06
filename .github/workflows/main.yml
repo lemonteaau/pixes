@@ -120,7 +120,7 @@ jobs:
           echo "$STORE_FILE" | base64 --decode > windows/app.pfx
       - name: build
         env:
-          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_KEYSTORE_PASSWORD }}
         run: |
           flutter pub get
           dart run msix:create -p ${{ env.CERTIFICATE_PASSWORD }}
