@@ -102,7 +102,6 @@ msix_config:
   display_name: Pixes
   publisher_display_name: nyne.dev
   identity_name: dev.nyne.pixes
-  msix_version: 1.2.0.0
   logo_path: ios\Runner\Assets.xcassets\AppIcon.appiconset\AppIcon@3x.png
   certificate_path: windows/app.pfx
   capabilities: internetClient
