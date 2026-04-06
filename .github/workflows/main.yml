@@ -14,7 +14,9 @@ jobs:
         with:
           channel: "stable"
           flutter-version-file: pubspec.yaml
-      - run: sudo xcode-select --switch /Applications/Xcode_26.4.0.app
+      - run: | 
+          sudo xcode-select --switch /Applications/Xcode_26.4.0.app
+          sudo xcodebuild -downloadComponent MetalToolchain
       - run: flutter pub get
         # Step 1: Decode and install the certificate
       - name: Decode and install certificate
@@ -54,15 +56,14 @@ jobs:
           name: macos_build
           path: result/
   Build_IOS:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
           channel: "stable"
           flutter-version-file: pubspec.yaml
-          architecture: x64
-      - run: sudo xcode-select --switch /Applications/Xcode_16.0.app
+      - run: sudo xcode-select --switch /Applications/Xcode_26.4.0.app
       - run: flutter pub get
       - run: flutter build ios --release --no-codesign
       - run: |
@@ -123,7 +124,7 @@ jobs:
           CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_KEYSTORE_PASSWORD }}
         run: |
           flutter pub get
-          dart run msix:create -p ${{ env.CERTIFICATE_PASSWORD }}
+          dart run msix:create -p ${{ env.CERTIFICATE_PASSWORD }} --install-certificate false
       - uses: actions/upload-artifact@v4
         with:
           name: windows_build
