@@ -252,5 +252,4 @@ jobs:
             outputs/*.zst
             outputs/*.msix
             windows_app.cer
-        env:
-          GITHUB_TOKEN: ${{ secrets.ACTION_GITHUB_TOKEN }}
+          token: ${{ secrets.ACTION_GITHUB_TOKEN }}
