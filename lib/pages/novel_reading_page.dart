@@ -219,7 +219,11 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String> {
                     children: [
                       const Icon(MdIcons.chevron_left, size: 18),
                       const SizedBox(width: 4),
-                      Text("Previous".tl, style: const TextStyle(height: 1.0)),
+                      Text("Previous".tl,
+                          style: const TextStyle(
+                              height: 1.0,
+                              leadingDistribution:
+                                  TextLeadingDistribution.even)),
                     ],
                   ),
                 ),
@@ -238,7 +242,10 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String> {
                           index >= 0
                               ? "${index + 1} / ${list.length}"
                               : "Chapters".tl,
-                          style: const TextStyle(height: 1.0),
+                          style: const TextStyle(
+                              height: 1.0,
+                              leadingDistribution:
+                                  TextLeadingDistribution.even),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -254,7 +261,11 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text("Next".tl, style: const TextStyle(height: 1.0)),
+                      Text("Next".tl,
+                          style: const TextStyle(
+                              height: 1.0,
+                              leadingDistribution:
+                                  TextLeadingDistribution.even)),
                       const SizedBox(width: 4),
                       const Icon(MdIcons.chevron_right, size: 18),
                     ],
@@ -299,8 +310,7 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String> {
             height: 300,
             width: double.infinity,
             child: AnimatedImage(
-              image:
-                  CachedNovelImageProvider(novel.id.toString(), imageId),
+              image: CachedNovelImageProvider(novel.id.toString(), imageId),
               filterQuality: FilterQuality.medium,
               fit: BoxFit.contain,
               height: 300,
