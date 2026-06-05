@@ -219,7 +219,7 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String> {
                     children: [
                       const Icon(MdIcons.chevron_left, size: 18),
                       const SizedBox(width: 4),
-                      Text("Previous".tl),
+                      Text("Previous".tl, style: const TextStyle(height: 1.0)),
                     ],
                   ),
                 ),
@@ -238,6 +238,7 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String> {
                           index >= 0
                               ? "${index + 1} / ${list.length}"
                               : "Chapters".tl,
+                          style: const TextStyle(height: 1.0),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -253,7 +254,7 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text("Next".tl),
+                      Text("Next".tl, style: const TextStyle(height: 1.0)),
                       const SizedBox(width: 4),
                       const Icon(MdIcons.chevron_right, size: 18),
                     ],
