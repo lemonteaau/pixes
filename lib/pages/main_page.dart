@@ -124,16 +124,31 @@ class _MainPageState extends State<MainPage>
 
   @override
   Widget build(BuildContext context) {
+    final titleBar = NaviAppBar(
+      navigatorKey: navigatorKey,
+      index: index,
+      navigate: (index) {
+        if (this.index == index) {
+          return;
+        }
+        setState(() {
+          this.index = index;
+        });
+        navigate(index);
+      },
+      windowButtonKey: windowButtonKey,
+    );
+
     if (!isLogin) {
       return NavigationView(
-        titleBar: buildAppBar(context, navigatorKey),
+        titleBar: titleBar,
         content: LoginPage(() => setState(() {})),
       );
     }
     return DefaultSelectionStyle.merge(
       selectionColor: FluentTheme.of(context).selectionColor.toOpacity(0.4),
       child: NavigationView(
-        titleBar: buildAppBar(context, navigatorKey),
+        titleBar: titleBar,
         pane: NavigationPane(
           selected: index,
           onChanged: (value) {
@@ -143,6 +158,12 @@ class _MainPageState extends State<MainPage>
             navigate(value);
           },
           items: [
+            PaneItemWidgetAdapter(
+              child: SizedBox(
+                height: MediaQuery.of(context).padding.top,
+              ),
+              applyPadding: false,
+            ),
             UserPane(),
             PaneItem(
               icon: const Icon(
@@ -245,7 +266,7 @@ class _MainPageState extends State<MainPage>
               builder: (context) => pageBuilders.elementAtOrNull(index)!(),
             ),
           ),
-        ),
+        ).paddingTop(MediaQuery.of(context).padding.top),
       ),
     );
   }
@@ -280,8 +301,44 @@ class _MainPageState extends State<MainPage>
     );
   }
 
-  Widget buildAppBar(
-      BuildContext context, GlobalKey<NavigatorState> navigatorKey) {
+  final popValue = ValueNotifier(false);
+
+  @override
+  ValueListenable<bool> get canPopNotifier => popValue;
+
+  @override
+  void onPopInvokedWithResult(bool didPop, result) {
+    if (App.rootNavigatorKey.currentState?.canPop() ?? false) {
+      App.rootNavigatorKey.currentState?.pop();
+    } else if (App.mainNavigatorKey?.currentState?.canPop() ?? false) {
+      App.mainNavigatorKey?.currentState?.pop();
+    } else {
+      SystemNavigator.pop();
+    }
+  }
+
+  @override
+  void onPopInvoked(bool didPop) {}
+}
+
+class NaviAppBar extends StatelessWidget {
+  const NaviAppBar(
+      {super.key,
+      required this.navigatorKey,
+      required this.index,
+      required this.navigate,
+      required this.windowButtonKey});
+
+  final GlobalKey<NavigatorState> navigatorKey;
+
+  final int index;
+
+  final int windowButtonKey;
+
+  final void Function(int) navigate;
+
+  @override
+  Widget build(BuildContext context) {
     return SizedBox(
       height: _appBarHeight,
       child: StateBuilder<TitleBarController>(
@@ -292,10 +349,12 @@ class _MainPageState extends State<MainPage>
               alignment: AlignmentDirectional.centerStart,
               child: Row(
                 children: [
-                  if (!App.isMacOS) _BackButton(navigatorKey).paddingRight(8),
                   if (App.isMacOS) const SizedBox(width: 72),
+                  const _MenuButton(),
                   if (App.isMacOS)
-                    _MacosBackButton(navigatorKey).paddingRight(8),
+                    _MacosBackButton(navigatorKey).paddingRight(8)
+                  else
+                    _BackButton(navigatorKey).paddingRight(8),
                   if (!App.isDesktop)
                     const Text(
                       "Pixes",
@@ -344,12 +403,6 @@ class _MainPageState extends State<MainPage>
                           size: 18,
                         ),
                         onPressed: () {
-                          if (index == 1) {
-                            return;
-                          }
-                          setState(() {
-                            index = 1;
-                          });
                           navigate(1);
                         },
                       ),
@@ -360,27 +413,54 @@ class _MainPageState extends State<MainPage>
           );
         },
       ),
-    );
+    ).paddingTop(MediaQuery.of(context).padding.top);
+  }
+}
+
+class _MenuButton extends StatefulWidget {
+  const _MenuButton();
+  @override
+  State<_MenuButton> createState() => __MenuButtonState();
+}
+
+class __MenuButtonState extends State<_MenuButton> {
+  late NavigationViewState naviState;
+  late MediaQueryData mediaData;
+
+  @override
+  void didChangeDependencies() {
+    // TODO: implement didChangeDependencies
+    super.didChangeDependencies();
+    naviState = NavigationView.of(context);
+    mediaData = MediaQuery.of(context);
   }
 
-  final popValue = ValueNotifier(false);
-
   @override
-  ValueListenable<bool> get canPopNotifier => popValue;
-
-  @override
-  void onPopInvokedWithResult(bool didPop, result) {
-    if (App.rootNavigatorKey.currentState?.canPop() ?? false) {
-      App.rootNavigatorKey.currentState?.pop();
-    } else if (App.mainNavigatorKey?.currentState?.canPop() ?? false) {
-      App.mainNavigatorKey?.currentState?.pop();
-    } else {
-      SystemNavigator.pop();
+  Widget build(BuildContext context) {
+    if (naviState.displayMode == PaneDisplayMode.expanded) {
+      return const SizedBox.shrink();
     }
+    return IconButton(
+      style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+        return ButtonThemeData.uncheckedInputColor(
+          FluentTheme.of(context),
+          states,
+          transparentWhenNone: true,
+          transparentWhenDisabled: true,
+        );
+      })),
+      icon: const Icon(
+        MdIcons.menu,
+        size: 16,
+      ),
+      onPressed: onPressed,
+    ).paddingLeft(4);
   }
 
-  @override
-  void onPopInvoked(bool didPop) {}
+  void onPressed() {
+    naviState.togglePane();
+  }
 }
 
 class _BackButton extends StatefulWidget {
@@ -429,35 +509,19 @@ class _BackButtonState extends State<_BackButton> {
       }
     }
 
-    return NavigationPaneTheme(
-      data: NavigationPaneTheme.of(context).merge(NavigationPaneThemeData(
-        unselectedIconColor: WidgetStateProperty.resolveWith((states) {
-          if (states.isDisabled) {
-            return ButtonThemeData.buttonColor(context, states);
-          }
-          return ButtonThemeData.uncheckedInputColor(
-            FluentTheme.of(context),
-            states,
-          ).basedOnLuminance();
-        }),
-      )),
-      child: Builder(
-        builder: (context) => PaneItem(
-          icon: const Center(child: Icon(FluentIcons.back, size: 12.0)),
-          title: const Text("Back"),
-          body: const SizedBox.shrink(),
-          enabled: enabled,
-        )
-            .build(
-              context: context,
-              selected: false,
-              onPressed: enabled ? onPressed : null,
-              displayMode: PaneDisplayMode.compact,
-              itemIndex: 0,
-            )
-            .paddingTop(2),
-      ),
-    );
+    return IconButton(
+      style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+        return ButtonThemeData.uncheckedInputColor(
+          FluentTheme.of(context),
+          states,
+          transparentWhenNone: true,
+          transparentWhenDisabled: true,
+        );
+      })),
+      icon: const Icon(FluentIcons.back),
+      onPressed: enabled ? onPressed : null,
+    ).paddingLeft(4);
   }
 }
 
