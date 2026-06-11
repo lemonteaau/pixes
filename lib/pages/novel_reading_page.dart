@@ -362,48 +362,38 @@ class _NovelChapterList extends StatelessWidget {
             itemBuilder: (context, index) {
               final n = novels[index];
               final isCurrent = n.id == currentId;
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
+              return ListTile(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                tileColor: isCurrent
+                    ?  WidgetStateColor.resolveWith((states) => ColorScheme.of(context).primaryContainer.toOpacity(0.6))
+                    : null,
+                onPressed: () {
                   Navigator.of(context).pop();
                   if (!isCurrent) {
                     onSelected(n);
                   }
                 },
-                child: Container(
-                  color: isCurrent
-                      ? ColorScheme.of(context).primaryContainer.toOpacity(0.4)
-                      : null,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 32,
-                        child: Text(
-                          "${index + 1}",
-                          style: TextStyle(
-                            color: ColorScheme.of(context).primary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          n.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (isCurrent)
-                        Icon(
-                          MdIcons.check,
-                          size: 18,
-                          color: ColorScheme.of(context).primary,
-                        ),
-                    ],
+                leading: Text(
+                  "${index + 1}",
+                  style: TextStyle(
+                    color: ColorScheme.of(context).primary,
+                    fontWeight: FontWeight.bold,
                   ),
+                ),
+                trailing: isCurrent
+                    ? Icon(
+                        MdIcons.check,
+                        size: 18,
+                        color: ColorScheme.of(context).primary,
+                      )
+                    : const SizedBox(
+                        width: 18,
+                        height: 18,
+                      ),
+                title: Text(
+                  n.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               );
             },
