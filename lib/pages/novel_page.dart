@@ -1,6 +1,6 @@
 import 'dart:collection';
 
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:fluent_ui/fluent_ui.dart' hide TitleBar;
 import 'package:flutter/gestures.dart';
 import 'package:pixes/components/animated_image.dart';
 import 'package:pixes/components/grid.dart';
@@ -399,8 +399,8 @@ class _NovelPageState extends State<NovelPage> {
                           ],
                         )
                             .fixWidth(shouldFillSpace
-                            ? width / 4 - 4 - kFluentButtonPadding
-                            : 64)
+                                ? width / 4 - 4 - kFluentButtonPadding
+                                : 64)
                             .fixHeight(32),
                       ),
                     ),

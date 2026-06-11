@@ -1,4 +1,4 @@
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:fluent_ui/fluent_ui.dart' hide TitleBar;
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:pixes/appdata.dart';
 import 'package:pixes/components/loading.dart';
@@ -30,8 +30,14 @@ class _HistoryPageState extends State<HistoryPage> {
           title: "History".tl,
           action: SegmentedButton<int>(
             options: [
-              SegmentedButtonOption(0, "Local".tl,),
-              SegmentedButtonOption(1, "Network".tl,),
+              SegmentedButtonOption(
+                0,
+                "Local".tl,
+              ),
+              SegmentedButtonOption(
+                1,
+                "Network".tl,
+              ),
             ],
             value: page,
             onPressed: (key) {
@@ -40,11 +46,10 @@ class _HistoryPageState extends State<HistoryPage> {
               });
             },
           ),
-          ),
+        ),
         Expanded(
-          child: page == 0
-              ? const LocalHistoryPage()
-              : const NetworkHistoryPage(),
+          child:
+              page == 0 ? const LocalHistoryPage() : const NetworkHistoryPage(),
         ),
       ],
     );

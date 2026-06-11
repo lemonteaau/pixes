@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:fluent_ui/fluent_ui.dart' hide TitleBar;
 import 'package:flutter/services.dart';
 import 'package:pixes/appdata.dart';
 import 'package:pixes/components/keyboard.dart';
@@ -726,17 +726,21 @@ class _SetInitialPageWidgetState extends State<_SetInitialPageWidget> {
           return Card(
             margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             padding: EdgeInsets.zero,
-            child: ListTile(
-              title: Text(pageNames[index].tl),
-              trailing: RadioButton(
-                checked: this.index - 1 == index,
-                onChanged: (value) {
-                  setState(() {
-                    this.index = index + 1;
-                    appdata.settings["initialPage"] = index + 1;
-                    appdata.writeData();
-                  });
-                },
+            child: RadioGroup<int>(
+              groupValue: this.index - 1,
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+                setState(() {
+                  this.index = value + 1;
+                  appdata.settings["initialPage"] = value + 1;
+                  appdata.writeData();
+                });
+              },
+              child: ListTile(
+                title: Text(pageNames[index].tl),
+                trailing: RadioButton<int>(value: index),
               ),
             ),
           );

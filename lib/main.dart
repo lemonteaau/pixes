@@ -46,7 +46,7 @@ void main() {
           // https://github.com/leanflutter/window_manager/issues/460
           return;
         }
-       
+
         if (App.isMacOS) {
           await windowManager.setMinimumSize(const Size(650, 600));
         } else {
@@ -89,8 +89,12 @@ class MyApp extends StatelessWidget {
             value: SystemUiOverlayStyle(
               systemNavigationBarColor: Colors.transparent,
               statusBarColor: Colors.transparent,
-              statusBarIconBrightness: brightness.opposite,
-              systemNavigationBarIconBrightness: brightness.opposite,
+              statusBarIconBrightness: brightness == Brightness.light
+                  ? Brightness.dark
+                  : Brightness.light,
+              systemNavigationBarIconBrightness: brightness == Brightness.light
+                  ? Brightness.dark
+                  : Brightness.light,
             ),
             child: DynamicColorBuilder(
               builder: (light, dark) {

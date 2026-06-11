@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:fluent_ui/fluent_ui.dart' hide TitleBar;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:photo_view/photo_view_gallery.dart';

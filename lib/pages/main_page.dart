@@ -126,14 +126,14 @@ class _MainPageState extends State<MainPage>
   Widget build(BuildContext context) {
     if (!isLogin) {
       return NavigationView(
-        appBar: buildAppBar(context, navigatorKey),
+        titleBar: buildAppBar(context, navigatorKey),
         content: LoginPage(() => setState(() {})),
       );
     }
     return DefaultSelectionStyle.merge(
       selectionColor: FluentTheme.of(context).selectionColor.toOpacity(0.4),
       child: NavigationView(
-        appBar: buildAppBar(context, navigatorKey),
+        titleBar: buildAppBar(context, navigatorKey),
         pane: NavigationPane(
           selected: index,
           onChanged: (value) {
@@ -280,93 +280,86 @@ class _MainPageState extends State<MainPage>
     );
   }
 
-  NavigationAppBar buildAppBar(
+  Widget buildAppBar(
       BuildContext context, GlobalKey<NavigatorState> navigatorKey) {
-    return NavigationAppBar(
-      automaticallyImplyLeading: false,
+    return SizedBox(
       height: _appBarHeight,
-      title: () {
-        return StateBuilder<TitleBarController>(
-          builder: (controller) {
-            Widget content = Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: Row(
-                  children: [
-                    if (App.isMacOS)
-                      const SizedBox(width: 72),
-                    if (App.isMacOS)
-                      _MacosBackButton(navigatorKey).paddingRight(8),
-                    if (!App.isDesktop)
-                      const Text(
-                        "Pixes",
-                        style: TextStyle(fontSize: 13),
-                      ),
-                    if (!App.isDesktop) const Spacer(),
-                    if (App.isDesktop)
-                      const Expanded(
-                        child: SizedBox(
-                          height: double.infinity,
-                          child: DragToMoveArea(
-                              child: Align(
+      child: StateBuilder<TitleBarController>(
+        builder: (controller) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Row(
+                children: [
+                  if (!App.isMacOS) _BackButton(navigatorKey).paddingRight(8),
+                  if (App.isMacOS) const SizedBox(width: 72),
+                  if (App.isMacOS)
+                    _MacosBackButton(navigatorKey).paddingRight(8),
+                  if (!App.isDesktop)
+                    const Text(
+                      "Pixes",
+                      style: TextStyle(fontSize: 13),
+                    ),
+                  if (!App.isDesktop) const Spacer(),
+                  if (App.isDesktop)
+                    const Expanded(
+                      child: SizedBox(
+                        height: double.infinity,
+                        child: DragToMoveArea(
+                          child: Align(
                             alignment: Alignment.centerLeft,
                             child: Text(
                               "Pixes",
                               style: TextStyle(fontSize: 13),
                             ),
-                          )),
+                          ),
                         ),
                       ),
-                    for (var action in controller.actions)
-                      Button(
-                        onPressed: action.onPressed,
-                        child: Row(
-                          children: [
-                            Icon(
-                              action.icon,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(action.title),
-                          ],
+                    ),
+                  for (var action in controller.actions)
+                    Button(
+                      onPressed: action.onPressed,
+                      child: Row(
+                        children: [
+                          Icon(
+                            action.icon,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(action.title),
+                        ],
+                      ),
+                    ).paddingTop(4).paddingLeft(4),
+                  if (App.isDesktop && !App.isMacOS)
+                    WindowButtons(
+                      key: ValueKey(windowButtonKey),
+                    )
+                  else
+                    Tooltip(
+                      message: "Search".tl,
+                      child: IconButton(
+                        icon: const Icon(
+                          MdIcons.search,
+                          size: 18,
                         ),
-                      ).paddingTop(4).paddingLeft(4),
-                    if (App.isDesktop)
-                      const SizedBox(width: 128)
-                    else
-                      Tooltip(
-                          message: "Search".tl,
-                          child: IconButton(
-                            icon: const Icon(
-                              MdIcons.search,
-                              size: 18,
-                            ),
-                            onPressed: () {
-                              if (index == 1) {
-                                return;
-                              }
-                              setState(() {
-                                index = 1;
-                              });
-                              navigate(1);
-                            },
-                          )),
-                  ],
-                ),
+                        onPressed: () {
+                          if (index == 1) {
+                            return;
+                          }
+                          setState(() {
+                            index = 1;
+                          });
+                          navigate(1);
+                        },
+                      ),
+                    ),
+                ],
               ),
-            );
-
-            return content;
-          },
-        );
-      }(),
-      leading: App.isMacOS ? null : _BackButton(navigatorKey),
-      actions: App.isDesktop && !App.isMacOS
-          ? WindowButtons(
-              key: ValueKey(windowButtonKey),
-            )
-          : null,
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -456,10 +449,11 @@ class _BackButtonState extends State<_BackButton> {
           enabled: enabled,
         )
             .build(
-              context,
-              false,
-              onPressed,
+              context: context,
+              selected: false,
+              onPressed: enabled ? onPressed : null,
               displayMode: PaneDisplayMode.compact,
+              itemIndex: 0,
             )
             .paddingTop(2),
       ),
@@ -665,22 +659,27 @@ class UserPane extends PaneItem {
   UserPane() : super(icon: const SizedBox(), body: const SizedBox());
 
   @override
-  Widget build(BuildContext context, bool selected, VoidCallback? onPressed,
-      {PaneDisplayMode? displayMode,
-      bool showTextOnTop = true,
-      int? itemIndex,
-      bool? autofocus}) {
+  Widget build({
+    required BuildContext context,
+    required bool selected,
+    required VoidCallback? onPressed,
+    required PaneDisplayMode? displayMode,
+    required int itemIndex,
+    int depth = 0,
+    bool showTextOnTop = true,
+    bool? autofocus,
+  }) {
     final maybeBody = NavigationView.maybeOf(context);
     var mode = displayMode ?? maybeBody?.displayMode ?? PaneDisplayMode.minimal;
 
     if (maybeBody?.compactOverlayOpen == true) {
-      mode = PaneDisplayMode.open;
+      mode = PaneDisplayMode.expanded;
     }
 
     Widget body = () {
       switch (mode) {
         case PaneDisplayMode.minimal:
-        case PaneDisplayMode.open:
+        case PaneDisplayMode.expanded:
           return LayoutBuilder(builder: (context, constrains) {
             if (constrains.maxHeight < 72 || constrains.maxWidth < 120) {
               return const SizedBox();

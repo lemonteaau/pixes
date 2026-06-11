@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:fluent_ui/fluent_ui.dart' hide TitleBar;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/services.dart';
@@ -359,7 +359,10 @@ class _IllustPageState extends State<IllustPage> {
         Text(
           widget.illust.title,
           style: const TextStyle(fontSize: 24),
-        ).paddingVertical(8).paddingHorizontal(12).toAlign(Alignment.centerLeft),
+        )
+            .paddingVertical(8)
+            .paddingHorizontal(12)
+            .toAlign(Alignment.centerLeft),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.start,

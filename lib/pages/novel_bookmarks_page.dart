@@ -1,4 +1,4 @@
-import 'package:fluent_ui/fluent_ui.dart';
+import 'package:fluent_ui/fluent_ui.dart' hide TitleBar;
 import 'package:pixes/appdata.dart';
 import 'package:pixes/components/grid.dart';
 import 'package:pixes/components/loading.dart';
