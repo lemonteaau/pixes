@@ -77,6 +77,8 @@ class _MainPageState extends State<MainPage>
 
   ModalRoute<dynamic>? _route;
 
+  final navigationViewKey = GlobalKey<NavigationViewState>();
+
   @override
   void initState() {
     StateController.put<TitleBarController>(TitleBarController());
@@ -148,6 +150,7 @@ class _MainPageState extends State<MainPage>
     return DefaultSelectionStyle.merge(
       selectionColor: FluentTheme.of(context).selectionColor.toOpacity(0.4),
       child: NavigationView(
+        key: navigationViewKey,
         titleBar: titleBar,
         pane: NavigationPane(
           selected: index,
@@ -156,6 +159,10 @@ class _MainPageState extends State<MainPage>
               index = value;
             });
             navigate(value);
+            final viewState = navigationViewKey.currentState!;
+            if (viewState.isMinimalPaneOpen) {
+              viewState.toggleMinimalPane();
+            }
           },
           items: [
             PaneItemWidgetAdapter(
@@ -252,6 +259,10 @@ class _MainPageState extends State<MainPage>
               body: const SizedBox.shrink(),
               onTap: () {
                 navigatorKey.currentContext?.to(() => const SettingsPage());
+                final viewState = navigationViewKey.currentState!;
+                if (viewState.isMinimalPaneOpen) {
+                  viewState.toggleMinimalPane();
+                }
               },
             ),
           ],
@@ -429,7 +440,6 @@ class __MenuButtonState extends State<_MenuButton> {
 
   @override
   void didChangeDependencies() {
-    // TODO: implement didChangeDependencies
     super.didChangeDependencies();
     naviState = NavigationView.of(context);
     mediaData = MediaQuery.of(context);
