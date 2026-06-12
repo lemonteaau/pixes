@@ -2,7 +2,6 @@ import "dart:async";
 
 import "package:fluent_ui/fluent_ui.dart";
 import "package:flutter/foundation.dart";
-import "package:flutter/services.dart";
 import "package:pixes/appdata.dart";
 import "package:pixes/components/md.dart";
 import "package:pixes/foundation/app.dart";
@@ -66,16 +65,12 @@ class MainPage extends StatefulWidget {
   State<MainPage> createState() => _MainPageState();
 }
 
-class _MainPageState extends State<MainPage>
-    with WindowListener
-    implements PopEntry {
+class _MainPageState extends State<MainPage> with WindowListener {
   final navigatorKey = GlobalKey<NavigatorState>();
 
   int index = 4;
 
   int windowButtonKey = 0;
-
-  ModalRoute<dynamic>? _route;
 
   final navigationViewKey = GlobalKey<NavigationViewState>();
 
@@ -90,21 +85,9 @@ class _MainPageState extends State<MainPage>
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final ModalRoute<dynamic>? nextRoute = ModalRoute.of(context);
-    if (nextRoute != _route) {
-      _route?.unregisterPopEntry(this);
-      _route = nextRoute;
-      _route?.registerPopEntry(this);
-    }
-  }
-
-  @override
   void dispose() {
     StateController.remove<TitleBarController>();
     windowManager.removeListener(this);
-    ModalRoute.of(context)!.unregisterPopEntry(this);
     super.dispose();
   }
 
@@ -147,6 +130,7 @@ class _MainPageState extends State<MainPage>
         content: LoginPage(() => setState(() {})),
       );
     }
+
     return DefaultSelectionStyle.merge(
       selectionColor: FluentTheme.of(context).selectionColor.toOpacity(0.4),
       child: NavigationView(
@@ -311,25 +295,6 @@ class _MainPageState extends State<MainPage>
       (route) => false,
     );
   }
-
-  final popValue = ValueNotifier(false);
-
-  @override
-  ValueListenable<bool> get canPopNotifier => popValue;
-
-  @override
-  void onPopInvokedWithResult(bool didPop, result) {
-    if (App.rootNavigatorKey.currentState?.canPop() ?? false) {
-      App.rootNavigatorKey.currentState?.pop();
-    } else if (App.mainNavigatorKey?.currentState?.canPop() ?? false) {
-      App.mainNavigatorKey?.currentState?.pop();
-    } else {
-      SystemNavigator.pop();
-    }
-  }
-
-  @override
-  void onPopInvoked(bool didPop) {}
 }
 
 class NaviAppBar extends StatelessWidget {

@@ -25,8 +25,17 @@ class ImagePage extends StatefulWidget {
   final int initialPage;
 
   static show(List<String> urls, {int initialPage = 0}) {
+    // Temporary solution for issue: https://github.com/flutter/flutter/issues/152323
+    // Patch 1 begin
+    if (App.isAndroid) {
+      App.mainNavigatorKey?.currentState?.push(AppPageRoute(
+        builder: (context) => const SizedBox(),
+      ));
+    }
+    // Patch 1 End
     App.rootNavigatorKey.currentState?.push(AppPageRoute(
-        builder: (context) => ImagePage(urls, initialPage: initialPage)));
+      builder: (context) => ImagePage(urls, initialPage: initialPage),
+    ));
   }
 
   @override
@@ -156,6 +165,16 @@ class _ImagePageState extends State<ImagePage> with WindowListener {
             ));
   }
 
+  void closePage() {
+    context.pop();
+    // Temporary solution for issue: https://github.com/flutter/flutter/issues/152323
+    // Patch 2 begin
+    if (App.isAndroid) {
+      App.mainNavigatorKey?.currentState?.pop();
+    }
+    // Patch 2 end
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -207,22 +226,20 @@ class _ImagePageState extends State<ImagePage> with WindowListener {
                     height: 36,
                     child: Row(
                       children: [
-                        if (App.isMacOS)
-                          const SizedBox(width: 72),
+                        if (App.isMacOS) const SizedBox(width: 72),
                         const SizedBox(
                           width: 6,
                         ),
                         IconButton(
                             icon: const Icon(FluentIcons.back).paddingAll(2),
-                            onPressed: () => context.pop()),
+                            onPressed: closePage),
                         const Expanded(
                           child: DragToMoveArea(
                             child: SizedBox.expand(),
                           ),
                         ),
                         buildActions(),
-                        if (App.isMacOS)
-                          const SizedBox(width: 16),
+                        if (App.isMacOS) const SizedBox(width: 16),
                         if (App.isWindows || App.isLinux)
                           WindowButtons(
                             key: ValueKey(windowButtonKey),
