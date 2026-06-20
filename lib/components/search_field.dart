@@ -71,7 +71,8 @@ class SearchField extends StatefulWidget {
   State<SearchField> createState() => _SearchFieldState();
 }
 
-class _SearchFieldState extends State<SearchField> with TickerProviderStateMixin {
+class _SearchFieldState extends State<SearchField>
+    with TickerProviderStateMixin {
   late final ValueNotifier<AutoCompleteData> autoCompleteItems;
 
   late final FocusNode focusNode;
@@ -115,6 +116,17 @@ class _SearchFieldState extends State<SearchField> with TickerProviderStateMixin
           isLoading: widget.isLoadingAutoCompleteItems,
         );
       });
+    }
+    if (widget.enableAutoComplete != oldWidget.enableAutoComplete) {
+      if (focusNode.hasFocus && widget.enableAutoComplete) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            onfocusChange();
+          }
+        });
+      } else {
+        _removeOverlayWithAnimation();
+      }
     }
     super.didUpdateWidget(oldWidget);
   }
@@ -177,7 +189,6 @@ class _SearchFieldState extends State<SearchField> with TickerProviderStateMixin
         _overlayEntry = null;
         _animationController?.dispose();
         _animationController = null;
-        _fadeAnimation = null;
       });
     }
   }

@@ -740,6 +740,8 @@ class _SearchBarState extends State<_SearchBar> {
 
   final textController = TextEditingController();
 
+  final focusNode = FocusNode();
+
   var autoCompleteItems = <AutoCompleteItem>[];
 
   var debouncer = Debounce(delay: const Duration(milliseconds: 300));
@@ -747,6 +749,46 @@ class _SearchBarState extends State<_SearchBar> {
   var autoCompleteKey = 0;
 
   var isLoadingAutoCompleteItems = false;
+
+  var isShowingSearchOptions = false;
+
+  @override
+  void dispose() {
+    focusNode.dispose();
+    textController.dispose();
+    super.dispose();
+  }
+
+  bool get enableAutoComplete {
+    return !isShowingSearchOptions &&
+        widget.searchType != 3 &&
+        widget.searchType != 4 &&
+        widget.searchType != 5;
+  }
+
+  Future<void> showSearchOptions() async {
+    final hadFocus = focusNode.hasFocus;
+    setState(() {
+      isShowingSearchOptions = true;
+    });
+    focusNode.unfocus();
+
+    if (hadFocus) {
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+    }
+    if (!mounted) return;
+
+    await optionController.showFlyout(
+      placementMode: FlyoutPlacementMode.bottomCenter,
+      builder: buildSearchOption,
+      barrierColor: Colors.transparent,
+    );
+    if (mounted) {
+      setState(() {
+        isShowingSearchOptions = false;
+      });
+    }
+  }
 
   Widget buildSearchOption(BuildContext context) {
     return MenuFlyout(
@@ -822,9 +864,8 @@ class _SearchBarState extends State<_SearchBar> {
                 children: [
                   Expanded(
                     child: SearchField(
-                      enableAutoComplete: widget.searchType != 3 &&
-                          widget.searchType != 4 &&
-                          widget.searchType != 5,
+                      focusNode: focusNode,
+                      enableAutoComplete: enableAutoComplete,
                       textEditingController: textController,
                       autoCompleteNoResultsText: "No results found".tl,
                       isLoadingAutoCompleteItems: isLoadingAutoCompleteItems,
@@ -860,19 +901,13 @@ class _SearchBarState extends State<_SearchBar> {
                   FlyoutTarget(
                     controller: optionController,
                     child: Button(
+                      onPressed: showSearchOptions,
                       child: const SizedBox(
                         height: 42,
                         child: Center(
                           child: Icon(FluentIcons.chevron_down),
                         ),
                       ),
-                      onPressed: () {
-                        optionController.showFlyout(
-                          placementMode: FlyoutPlacementMode.bottomCenter,
-                          builder: buildSearchOption,
-                          barrierColor: Colors.transparent,
-                        );
-                      },
                     ),
                   ),
                   const SizedBox(width: 4),
