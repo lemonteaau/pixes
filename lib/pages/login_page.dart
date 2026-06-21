@@ -88,7 +88,9 @@ class _LoginPageState extends State<LoginPage> {
                         width: 8,
                       ),
                       Expanded(
-                        child: Text("I understand pixes is a free unofficial application.".tl),
+                        child: Text(
+                            "I understand pixes is a free unofficial application."
+                                .tl),
                       )
                     ],
                   )
@@ -179,7 +181,7 @@ class _LoginPageState extends State<LoginPage> {
 
   void onContinue() async {
     bool? useExternal;
-    if (App.isMobile) {
+    if (!App.isLinux) {
       await showDialog(
         context: context,
         barrierDismissible: true,
@@ -226,10 +228,10 @@ class _LoginPageState extends State<LoginPage> {
     if (!useExternal! && mounted) {
       context.to(() => WebviewPage(
             url,
-            onNavigation: (req) {
-              if (req.url.startsWith("pixiv://")) {
+            onNavigation: (url) {
+              if (url.startsWith("pixiv://")) {
                 App.rootNavigatorKey.currentState!.pop();
-                onLink?.call(Uri.parse(req.url));
+                onLink?.call(Uri.parse(url));
                 return false;
               }
               return true;

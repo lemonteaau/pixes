@@ -57,7 +57,7 @@ dependencies:
   file_selector: ^1.0.1
   flutter_file_dialog: ^3.0.2
   archive: ^4.0.7
-  webview_flutter: ^4.13.0
+  zikzak_inappwebview: ^4.4.2
   device_info_plus: ^11.5.0
   image_gallery_saver_plus: ^4.0.1
 dev_dependencies:
