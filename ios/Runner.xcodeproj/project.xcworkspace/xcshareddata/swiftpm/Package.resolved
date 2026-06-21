@@ -1,0 +1,22 @@
+{
+  "pins" : [
+    {
+      "identity" : "csqlite",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/simolus3/CSQLite.git",
+      "state" : {
+        "revision" : "18517bdeb5ae69cb3d864d4fd0f4ab4d4809f18b"
+      }
+    },
+    {
+      "identity" : "orderedset",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Weebly/OrderedSet.git",
+      "state" : {
+        "revision" : "7fdeb65e28febc2d30439947759d4b8e53d3b949",
+        "version" : "6.0.3"
+      }
+    }
+  ],
+  "version" : 2
+}
