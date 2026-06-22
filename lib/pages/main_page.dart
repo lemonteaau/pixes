@@ -157,26 +157,17 @@ class _MainPageState extends State<MainPage> with WindowListener {
             ),
             UserPane(),
             PaneItem(
-              icon: const Icon(
-                MdIcons.search,
-                size: 20,
-              ),
+              icon: const _PaneIcon(MdIcons.search),
               title: Text('Search'.tl),
               body: const SizedBox.shrink(),
             ),
             PaneItem(
-              icon: const Icon(
-                MdIcons.downloading,
-                size: 20,
-              ),
+              icon: const _PaneIcon(MdIcons.downloading),
               title: Text('Downloading'.tl),
               body: const SizedBox.shrink(),
             ),
             PaneItem(
-              icon: const Icon(
-                MdIcons.download,
-                size: 20,
-              ),
+              icon: const _PaneIcon(MdIcons.download),
               title: Text('Downloaded'.tl),
               body: const SizedBox.shrink(),
             ),
@@ -186,30 +177,27 @@ class _MainPageState extends State<MainPage> with WindowListener {
                     .paddingBottom(4)
                     .paddingLeft(8)),
             PaneItem(
-              icon: const Icon(
-                MdIcons.explore_outlined,
-                size: 20,
-              ),
+              icon: const _PaneIcon(MdIcons.explore_outlined),
               title: Text('Explore'.tl),
               body: const SizedBox.shrink(),
             ),
             PaneItem(
-              icon: const Icon(MdIcons.bookmark_outline, size: 20),
+              icon: const _PaneIcon(MdIcons.bookmark_outline),
               title: Text('Bookmarks'.tl),
               body: const SizedBox.shrink(),
             ),
             PaneItem(
-              icon: const Icon(MdIcons.interests_outlined, size: 20),
+              icon: const _PaneIcon(MdIcons.interests_outlined),
               title: Text('Following'.tl),
               body: const SizedBox.shrink(),
             ),
             PaneItem(
-              icon: const Icon(MdIcons.history, size: 20),
+              icon: const _PaneIcon(MdIcons.history),
               title: Text('History'.tl),
               body: const SizedBox.shrink(),
             ),
             PaneItem(
-              icon: const Icon(MdIcons.leaderboard_outlined, size: 20),
+              icon: const _PaneIcon(MdIcons.leaderboard_outlined),
               title: Text('Ranking'.tl),
               body: const SizedBox.shrink(),
             ),
@@ -217,28 +205,28 @@ class _MainPageState extends State<MainPage> with WindowListener {
             PaneItemHeader(
                 header: Text("Novel".tl).paddingBottom(4).paddingLeft(8)),
             PaneItem(
-              icon: const Icon(MdIcons.featured_play_list_outlined, size: 20),
+              icon: const _PaneIcon(MdIcons.featured_play_list_outlined),
               title: Text('Recommendation'.tl),
               body: const SizedBox.shrink(),
             ),
             PaneItem(
-              icon: const Icon(MdIcons.collections_bookmark_outlined, size: 20),
+              icon: const _PaneIcon(MdIcons.collections_bookmark_outlined),
               title: Text('Bookmarks'.tl),
               body: const SizedBox.shrink(),
             ),
             PaneItem(
-              icon: const Icon(MdIcons.interests_outlined, size: 20),
+              icon: const _PaneIcon(MdIcons.interests_outlined),
               title: Text('Following'.tl),
               body: const SizedBox.shrink(),
             ),
             PaneItem(
-              icon: const Icon(MdIcons.leaderboard_outlined, size: 20),
+              icon: const _PaneIcon(MdIcons.leaderboard_outlined),
               title: Text('Ranking'.tl),
               body: const SizedBox.shrink(),
             ),
             PaneItemSeparator(),
             PaneItemAction(
-              icon: const Icon(MdIcons.settings_outlined, size: 20),
+              icon: const _PaneIcon(MdIcons.settings_outlined),
               title: Text('Settings'.tl),
               body: const SizedBox.shrink(),
               onTap: () {
@@ -959,3 +947,24 @@ Paint getPaint(Color color, [bool isAntiAlias = false]) => Paint()
   ..style = PaintingStyle.stroke
   ..isAntiAlias = isAntiAlias
   ..strokeWidth = 1;
+
+class _PaneIcon extends StatelessWidget {
+  const _PaneIcon(this.icon);
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 14,
+      height: 14,
+      clipBehavior: Clip.none,
+      child: OverflowBox(
+        maxWidth: double.infinity,
+        maxHeight: double.infinity,
+        alignment: Alignment.center,
+        child: Icon(icon, size: 20),
+      ),
+    );
+  }
+}
