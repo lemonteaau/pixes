@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:zikzak_inappwebview/zikzak_inappwebview.dart';
 import 'package:pixes/components/md.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -37,10 +38,17 @@ class _WebviewPageState extends State<WebviewPage> {
           height: _appBarHeight,
           child: Row(
             children: [
-              if (App.isMacOS)
-                const SizedBox(width: 64),
-              const Text("Webview"),
-              const Spacer(),
+              if (App.isMacOS) const SizedBox(width: 64),
+              if (App.isDesktop)
+                const Expanded(
+                  child: DragToMoveArea(
+                    child: Text("Webview"),
+                  ),
+                )
+              else
+                const Expanded(
+                  child: Text("Webview"),
+                ),
               IconButton(
                 icon: const Icon(
                   MdIcons.open_in_new,
@@ -48,6 +56,15 @@ class _WebviewPageState extends State<WebviewPage> {
                 ),
                 onPressed: () {
                   launchUrlString(widget.url);
+                  context.pop();
+                },
+              ),
+              IconButton(
+                icon: const Icon(
+                  MdIcons.close,
+                  size: 20,
+                ),
+                onPressed: () {
                   context.pop();
                 },
               ),
