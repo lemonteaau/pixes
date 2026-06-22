@@ -15,7 +15,7 @@ class WindowPlacement {
   Future<void> applyToWindow() async {
     await windowManager.setBounds(rect);
 
-    if(!validate(rect)){
+    if (!validate(rect)) {
       await windowManager.center();
     }
 
@@ -36,14 +36,18 @@ class WindowPlacement {
   }
 
   static Future<WindowPlacement> loadFromFile() async {
-    var file = File("${App.dataPath}/window_placement");
-    if (!file.existsSync()) {
+    try {
+      var file = File("${App.dataPath}/window_placement");
+      if (!file.existsSync()) {
+        return defaultPlacement;
+      }
+      var json = jsonDecode(await file.readAsString());
+      var rect =
+          Rect.fromLTWH(json['x'], json['y'], json['width'], json['height']);
+      return WindowPlacement(rect, json['isMaximized']);
+    } catch (_) {
       return defaultPlacement;
     }
-    var json = jsonDecode(await file.readAsString());
-    var rect =
-        Rect.fromLTWH(json['x'], json['y'], json['width'], json['height']);
-    return WindowPlacement(rect, json['isMaximized']);
   }
 
   static Future<WindowPlacement> get current async {
@@ -59,7 +63,7 @@ class WindowPlacement {
 
   static void loop() async {
     var placement = await WindowPlacement.current;
-    if(!validate(placement.rect)){
+    if (!validate(placement.rect)) {
       return;
     }
     if (placement.rect != cache.rect ||
@@ -69,7 +73,7 @@ class WindowPlacement {
     }
   }
 
-  static bool validate(Rect rect){
+  static bool validate(Rect rect) {
     return rect.topLeft.dx >= 0 && rect.topLeft.dy >= 0;
   }
 }
