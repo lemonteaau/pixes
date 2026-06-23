@@ -3,11 +3,10 @@ run-name: Build ALL
 on:
   workflow_dispatch:
     inputs:
-      # macOS build disabled: the macOS job frequently exceeds GitHub Actions' job time limit during Flutter builds.
-      # build_macos:
-      #   description: Build macOS
-      #   type: boolean
-      #   default: true
+      build_macos:
+        description: Build macOS
+        type: boolean
+        default: true
       build_ios:
         description: Build iOS
         type: boolean
@@ -32,52 +31,51 @@ on:
     types: [published]
 
 jobs:
-  # macOS build disabled: macOS builds on GitHub-hosted runners often hit the job timeout.
-  # Build_MacOS:
-  #   if: github.event_name == 'release' || github.event.inputs.build_macos == 'true'
-  #   runs-on: macos-15
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - uses: subosito/flutter-action@v2
-  #       with:
-  #         channel: "stable"
-  #         flutter-version-file: pubspec.yaml
-  #     - run: sudo xcode-select --switch /Applications/Xcode_16.4.0.app
-  #     - run: flutter pub get
-  #       # Step 1: Decode and install the certificate
-  #     - name: Decode and install certificate
-  #       env:
-  #         CERTIFICATE: ${{ secrets.CERTIFICATE }}
-  #         CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
-  #       run: |
-  #         echo "$CERTIFICATE" | base64 --decode > signing_certificate.p12
-  #         security import signing_certificate.p12 -k ~/Library/Keychains/login.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-  #
-  #     # Step 2: Build the Flutter macOS app
-  #     - name: Build Flutter macOS App
-  #       run: flutter build macos --release
-  #
-  #     # Step 3: Create the DMG file
-  #     - name: Create DMG
-  #       run: |
-  #         mkdir -p dist
-  #         mkdir -p dist/dmg_contents
-  #         cp -R build/macos/Build/Products/Release/pixes.app dist/dmg_contents/
-  #         ln -s /Applications dist/dmg_contents/Applications
-  #         hdiutil create -volname "pixes" -srcfolder dist/dmg_contents -ov -format UDZO "dist/pixes.dmg"
-  #
-  #     - name: Add version to filename
-  #       run: |
-  #         APP_VERSION=$(grep "version:" pubspec.yaml | cut -d':' -f2 | tr -d ' ')
-  #         mkdir -p result
-  #         mv dist/pixes.dmg result/pixes-$APP_VERSION.dmg
-  #
-  #     # Step 4: Attach and upload artifacts (optional)
-  #     - name: Upload DMG
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: macos_build
-  #         path: result/
+  Build_MacOS:
+    if: github.event_name == 'release' || github.event.inputs.build_macos == 'true'
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          flutter-version-file: pubspec.yaml
+      - name: Select latest available Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then
+            XCODE=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          fi
+          echo "Selecting Xcode at: $XCODE"
+          sudo xcode-select --switch "$XCODE"
+          xcodebuild -version
+      - run: flutter pub get
+      - name: Decode and install certificate
+        env:
+          CERTIFICATE: ${{ secrets.CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$CERTIFICATE" | base64 --decode > signing_certificate.p12
+          security import signing_certificate.p12 -k ~/Library/Keychains/login.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+      - name: Build Flutter macOS App
+        run: flutter build macos --release
+      - name: Create DMG
+        run: |
+          mkdir -p dist
+          mkdir -p dist/dmg_contents
+          cp -R build/macos/Build/Products/Release/pixes.app dist/dmg_contents/
+          ln -s /Applications dist/dmg_contents/Applications
+          hdiutil create -volname "pixes" -srcfolder dist/dmg_contents -ov -format UDZO "dist/pixes.dmg"
+      - name: Add version to filename
+        run: |
+          APP_VERSION=$(grep "version:" pubspec.yaml | cut -d':' -f2 | tr -d ' ')
+          mkdir -p result
+          mv dist/pixes.dmg result/pixes-$APP_VERSION.dmg
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos_build
+          path: result/
   Build_IOS:
     if: github.event_name == 'release' || github.event.inputs.build_ios == 'true'
     runs-on: macos-26
@@ -158,11 +156,26 @@ jobs:
           CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_KEYSTORE_PASSWORD }}
         run: |
           flutter pub get
+          flutter build windows --release
+      - name: Package Windows ZIP
+        shell: pwsh
+        run: |
+          $versionLine = Select-String -Path pubspec.yaml -Pattern '^version:\s*(.+)$' | Select-Object -First 1
+          $version = ($versionLine.Matches[0].Groups[1].Value -split '\+')[0].Trim()
+          $releaseDir = "build/windows/x64/runner/Release"
+          $zipPath = "build/windows/pixes-$version-windows.zip"
+          Compress-Archive -Path "$releaseDir/*" -DestinationPath $zipPath -Force
+      - name: Create MSIX
+        env:
+          CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_KEYSTORE_PASSWORD }}
+        run: |
           dart run msix:create -p ${{ env.CERTIFICATE_PASSWORD }} --install-certificate false
       - uses: actions/upload-artifact@v4
         with:
           name: windows_build
-          path: build/windows/x64/runner/Release/pixes.msix
+          path: |
+            build/windows/x64/runner/Release/pixes.msix
+            build/windows/pixes-*-windows.zip
   Build_Linux:
     if: github.event_name == 'release' || github.event.inputs.build_linux == 'true'
     runs-on: ubuntu-latest
@@ -213,14 +226,13 @@ jobs:
           path: build/linux/x64/release/debian # This is a bug related to flutter_to_debian, but it's not a big deal.
   Release:
     runs-on: ubuntu-latest
-    needs: [Build_IOS, Build_Android, Build_Windows, Build_Linux, Build_Linux_ARM64]
+    needs: [Build_MacOS, Build_IOS, Build_Android, Build_Windows, Build_Linux, Build_Linux_ARM64]
     if: github.event_name == 'release'
     steps:
-      # macOS artifact: disabled together with Build_MacOS (was macos.zip / DMG from that job).
-      # - uses: actions/download-artifact@v4
-      #   with:
-      #     name: macos.zip
-      #     path: outputs
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos_build
+          path: outputs
       - uses: actions/download-artifact@v4
         with:
           name: app-ios.ipa
