@@ -172,10 +172,7 @@ class _MainPageState extends State<MainPage> with WindowListener {
               body: const SizedBox.shrink(),
             ),
             PaneItemSeparator(),
-            PaneItemHeader(
-                header: Text('${"Illustrations".tl}/${"Manga".tl}')
-                    .paddingBottom(4)
-                    .paddingLeft(8)),
+            _PaneHeaderItem('${"Illustrations".tl}/${"Manga".tl}'),
             PaneItem(
               icon: const _PaneIcon(MdIcons.explore_outlined),
               title: Text('Explore'.tl),
@@ -202,8 +199,7 @@ class _MainPageState extends State<MainPage> with WindowListener {
               body: const SizedBox.shrink(),
             ),
             PaneItemSeparator(),
-            PaneItemHeader(
-                header: Text("Novel".tl).paddingBottom(4).paddingLeft(8)),
+            _PaneHeaderItem("Novel".tl),
             PaneItem(
               icon: const _PaneIcon(MdIcons.featured_play_list_outlined),
               title: Text('Recommendation'.tl),
@@ -824,6 +820,40 @@ class UserPane extends PaneItem {
       key: key,
       padding: const EdgeInsetsDirectional.only(bottom: 4.0),
       child: button,
+    );
+  }
+}
+
+class _PaneHeaderItem extends PaneItemWidgetAdapter {
+  _PaneHeaderItem(this.title) : super(child: const SizedBox.shrink());
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final view = NavigationView.dataOf(context);
+    if (view.displayMode == PaneDisplayMode.compact) {
+      return const SizedBox.shrink();
+    }
+
+    final theme = NavigationPaneTheme.of(context);
+    return Container(
+      constraints: const BoxConstraints(minHeight: 4),
+      padding: (theme.iconPadding ?? EdgeInsetsDirectional.zero).add(
+        view.displayMode == PaneDisplayMode.top
+            ? EdgeInsetsDirectional.zero
+            : theme.headerPadding ?? EdgeInsetsDirectional.zero,
+      ),
+      child: DefaultTextStyle.merge(
+        style: theme.itemHeaderTextStyle,
+        softWrap: false,
+        maxLines: 1,
+        overflow: TextOverflow.fade,
+        textAlign: view.displayMode == PaneDisplayMode.top
+            ? TextAlign.center
+            : TextAlign.left,
+        child: Text(title).paddingBottom(4).paddingLeft(4),
+      ),
     );
   }
 }
