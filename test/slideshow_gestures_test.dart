@@ -65,16 +65,20 @@ void main() {
     });
   });
 
+  SlideshowController<ui.Image> newController(WidgetTester tester) =>
+      SlideshowController<ui.Image>(
+        initialIllusts: [artwork(1), artwork(2, pages: 2), artwork(3)],
+        nextUrl: null,
+        loadPage: (_) async => const Res([]),
+        loadImage: (_) => _ImageLoad(source),
+        now: tester.binding.clock.now,
+      );
+
   Future<SlideshowController<ui.Image>> showViewer(WidgetTester tester,
       {bool playing = true,
+      Object? resumeKey,
       Future<Res<bool>> Function(Illust, bool)? bookmark}) async {
-    final controller = SlideshowController<ui.Image>(
-      initialIllusts: [artwork(1), artwork(2, pages: 2), artwork(3)],
-      nextUrl: null,
-      loadPage: (_) async => const Res([]),
-      loadImage: (_) => _ImageLoad(source),
-      now: tester.binding.clock.now,
-    )..playing = playing;
+    final controller = newController(tester)..playing = playing;
     await tester.pumpWidget(FluentApp(
       home: SlideshowPage(
         illusts: const [],
@@ -82,6 +86,7 @@ void main() {
         source: '推荐',
         controller: controller,
         setBookmark: bookmark,
+        resumeKey: resumeKey,
       ),
     ));
     await tester.pump();
@@ -281,6 +286,58 @@ void main() {
     await tester.tap(find.text('3s'));
     await tester.pump();
     expect(controller.interval, const Duration(seconds: 3));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 200));
+  });
+
+  testWidgets('tapping outside the middle toggles the controls, not playback',
+      (tester) async {
+    final controller = await showViewer(tester);
+    double authorOpacity() => tester
+        .widget<AnimatedOpacity>(find
+            .ancestor(
+                of: find.text('@Artist'),
+                matching: find.byType(AnimatedOpacity))
+            .first)
+        .opacity;
+    expect(authorOpacity(), 1);
+    await tester.tapAt(const Offset(100, 150));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(controller.playing, isTrue);
+    expect(authorOpacity(), 0);
+    await tester.tapAt(const Offset(100, 150));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(controller.playing, isTrue);
+    expect(authorOpacity(), 1);
+    await tester.tapAt(const Offset(400, 300));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(controller.playing, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 200));
+  });
+
+  testWidgets('reopening the same feed resumes where playback stopped',
+      (tester) async {
+    final feed = Object();
+    final first = await showViewer(tester, playing: false, resumeKey: feed);
+    await first.goTo(2);
+    await settlePaging(tester);
+    expect(first.current!.illust.id, 2);
+    expect(first.current!.page, 1);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 200));
+
+    final resumed = await showViewer(tester, playing: false, resumeKey: feed);
+    await settlePaging(tester);
+    expect(resumed.current!.illust.id, 2);
+    expect(resumed.current!.page, 1);
+    expect(find.text('2 / 2'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 200));
+
+    // A refreshed feed is a different list, so it starts from the top.
+    final fresh = await showViewer(tester, playing: false, resumeKey: Object());
+    expect(fresh.current!.illust.id, 1);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 200));
   });

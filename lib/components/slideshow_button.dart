@@ -10,11 +10,16 @@ class SlideshowButton extends StatelessWidget {
     required this.source,
     required this.illusts,
     required this.nextUrl,
+    this.resumeKey,
   });
 
   final String source;
   final List<Illust> Function() illusts;
   final String? Function() nextUrl;
+
+  /// Identifies the feed; reopening the same, unrefreshed feed resumes
+  /// where the last slideshow stopped.
+  final Object? Function()? resumeKey;
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +35,7 @@ class SlideshowButton extends StatelessWidget {
               illusts: initialIllusts,
               nextUrl: continuation,
               source: source,
+              resumeKey: resumeKey?.call(),
             ),
           ));
         },

@@ -81,10 +81,16 @@ class SlideshowController<T> extends ChangeNotifier {
   T? image;
 
   Slide? get current => _index < 0 ? null : _slides[_index];
+  String? get nextUrl => _nextUrl;
+
+  /// The playable works in order, including pages this controller fetched.
+  List<Illust> get illusts =>
+      [for (final pages in _works) _slides[pages.first].illust];
   int get currentIndex => _index;
   Duration get interval => _interval;
   int get position => _index + 1;
   int get workCount => _works.length;
+  int get slideCount => _slides.length;
   int workOf(int index) => _workIndices[index];
   List<int> pagesOf(int work) => List.unmodifiable(_works[work]);
   Slide slideAt(int index) => _slides[index];

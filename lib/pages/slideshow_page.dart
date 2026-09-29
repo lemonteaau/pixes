@@ -35,6 +35,7 @@ class SlideshowPage extends StatefulWidget {
     required this.source,
     this.controller,
     this.setBookmark,
+    this.resumeKey,
   });
 
   final List<Illust> illusts;
@@ -46,6 +47,13 @@ class SlideshowPage extends StatefulWidget {
   final SlideshowController<ui.Image>? controller;
   final Future<Res<bool>> Function(Illust illust, bool value)? setBookmark;
 
+  /// Identifies the feed this slideshow plays; see [SlideshowButton].
+  final Object? resumeKey;
+
+  /// Where the last slideshow of each feed stopped. Kept in memory only, so
+  /// a refreshed feed (a new key) or a restarted app starts from the top.
+  static final _sessions = Expando<_Session>('slideshow sessions');
+
   @override
   State<SlideshowPage> createState() => _SlideshowPageState();
 }
@@ -54,7 +62,7 @@ class _SlideshowPageState extends State<SlideshowPage>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late final SlideshowController<ui.Image> _controller;
   late final AnimationController _countdown;
-  final _vertical = PageController();
+  late final PageController _vertical;
   final _workKeys = <int, GlobalKey<_ArtworkPagerState>>{};
   final _bursts = <_Burst>[];
   final _bookmarkedWhenShown = <int, bool>{};
@@ -86,10 +94,12 @@ class _SlideshowPageState extends State<SlideshowPage>
     _countdown = AnimationController(vsync: this);
     final saved = appdata.settings['slideshowInterval'];
     final seconds = saved is num ? saved.toInt().clamp(1, 60) : 5;
+    final key = widget.resumeKey;
+    final session = key == null ? null : SlideshowPage._sessions[key];
     _controller = widget.controller ??
         SlideshowController<ui.Image>(
-          initialIllusts: widget.illusts,
-          nextUrl: widget.nextUrl,
+          initialIllusts: session?.illusts ?? widget.illusts,
+          nextUrl: session != null ? session.nextUrl : widget.nextUrl,
           loadPage: Network().getIllustsWithNextUrl,
           loadImage: OriginalImageLoad.new,
           interval: Duration(seconds: seconds),
@@ -109,7 +119,16 @@ class _SlideshowPageState extends State<SlideshowPage>
       }
       if (mounted) setState(() {});
     });
-    if (_controller.current == null) unawaited(_controller.next());
+    final resumeAt = session != null && session.index < _controller.slideCount
+        ? session.index
+        : null;
+    _vertical = PageController(
+        initialPage: resumeAt == null ? 0 : _controller.workOf(resumeAt));
+    if (_controller.current == null) {
+      unawaited(
+          resumeAt == null ? _controller.next() : _controller.goTo(resumeAt));
+    }
+    _setImmersive(true);
     _updateCountdown();
     _wasPlaying = _controller.playing;
     _showControls();
@@ -263,9 +282,45 @@ class _SlideshowPageState extends State<SlideshowPage>
     return false;
   }
 
-  void _tap() {
-    _controller.togglePlaying();
+  /// The middle of the screen pauses and resumes; anywhere else shows or
+  /// hides the controls.
+  static Rect _pauseZone(Size size) {
+    final side = (size.shortestSide * 0.36).clamp(120.0, 200.0);
+    return Rect.fromCenter(
+        center: size.center(Offset.zero), width: side, height: side);
+  }
+
+  void _tapUp(TapUpDetails details) {
+    final size = context.size;
+    if (size != null && _pauseZone(size).contains(details.localPosition)) {
+      _controller.togglePlaying();
+    } else if (_controlsVisible) {
+      _hideControls();
+    } else {
+      _showControls();
+    }
     _releaseTouch();
+  }
+
+  void _hideControls() {
+    _hideTimer?.cancel();
+    if (_controlsVisible && mounted) setState(() => _controlsVisible = false);
+  }
+
+  /// Full screen while playing: hides the status and navigation bars.
+  void _setImmersive(bool value) {
+    if (!App.isMobile) return;
+    unawaited(SystemChrome.setEnabledSystemUIMode(
+        value ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge));
+  }
+
+  void _saveSession() {
+    final key = widget.resumeKey;
+    if (key == null) return;
+    final index = _controller.currentIndex;
+    SlideshowPage._sessions[key] = index < 0 || _controller.ended
+        ? null
+        : _Session(_controller.illusts, _controller.nextUrl, index);
   }
 
   void _doubleTap() {
@@ -308,8 +363,11 @@ class _SlideshowPageState extends State<SlideshowPage>
   /// Opens another page on top, pausing playback until it is closed.
   Future<void> _open(Route<void> route) async {
     _controller.setActive(false);
+    _setImmersive(false);
     await Navigator.of(context).push(route);
-    if (mounted) _controller.setActive(true);
+    if (!mounted) return;
+    _setImmersive(true);
+    _controller.setActive(true);
   }
 
   void _openDetails(Illust illust) =>
@@ -376,12 +434,16 @@ class _SlideshowPageState extends State<SlideshowPage>
       _controller.setActive(false);
       _controller.setInteracting(false);
     } else if (ModalRoute.of(context)?.isCurrent ?? true) {
+      // The system may bring the bars back while the app was away.
+      _setImmersive(true);
       _controller.setActive(true);
     }
   }
 
   @override
   void dispose() {
+    _saveSession();
+    _setImmersive(false);
     WidgetsBinding.instance.removeObserver(this);
     _tapTimer?.cancel();
     _messageTimer?.cancel();
@@ -413,7 +475,7 @@ class _SlideshowPageState extends State<SlideshowPage>
       child: GestureDetector(
         key: const ValueKey('slideshow-gestures'),
         behavior: HitTestBehavior.opaque,
-        onTap: _tap,
+        onTapUp: _tapUp,
         onDoubleTapDown: (details) =>
             _doubleTapPosition = details.localPosition,
         onDoubleTap: _doubleTap,
@@ -744,14 +806,36 @@ class _SlideshowPageState extends State<SlideshowPage>
                         position: burst.position,
                         onDone: () => setState(() => _bursts.remove(burst)),
                       ),
-                    if (slide != null && !_controller.playing)
-                      const IgnorePointer(
+                    // Marks the pause zone: a play icon while paused, and a
+                    // pause icon while playing with the controls shown.
+                    if (slide != null)
+                      IgnorePointer(
                         child: Center(
-                          child: Icon(
-                            MdIcons.play_arrow_rounded,
-                            key: ValueKey('slideshow-paused'),
-                            size: 84,
-                            color: Color(0x99FFFFFF),
+                          child: AnimatedOpacity(
+                            opacity: !_controller.playing
+                                ? 1
+                                : _controlsVisible
+                                    ? 0.7
+                                    : 0,
+                            duration: _overlayFadeDuration,
+                            child: Container(
+                              width: 88,
+                              height: 88,
+                              decoration: const BoxDecoration(
+                                color: Color(0x40000000),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                _controller.playing
+                                    ? MdIcons.pause_rounded
+                                    : MdIcons.play_arrow_rounded,
+                                key: ValueKey(_controller.playing
+                                    ? 'slideshow-playing'
+                                    : 'slideshow-paused'),
+                                size: 60,
+                                color: const Color(0xCCFFFFFF),
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -826,6 +910,13 @@ String _compactCount(int value) {
   } catch (_) {
     return value.toString();
   }
+}
+
+class _Session {
+  const _Session(this.illusts, this.nextUrl, this.index);
+  final List<Illust> illusts;
+  final String? nextUrl;
+  final int index;
 }
 
 class _Burst {

@@ -54,6 +54,8 @@ class _BookMarkedArtworkPageState extends State<BookMarkedArtworkPage> {
           SlideshowButton(
             source: 'Bookmarks'.tl,
             illusts: () => pageKeys[restrict]?.currentState?.loadedData ?? [],
+            resumeKey: () =>
+                pageKeys[restrict]?.currentState?.loadedDataIdentity,
             nextUrl: () =>
                 pageKeys[restrict]?.currentState?.nextUrl ??
                 '/v1/user/bookmarks/illust?user_id=${appdata.account?.user.id}&restrict=$restrict',

@@ -54,6 +54,8 @@ class _FollowingArtworksPageState extends State<FollowingArtworksPage> {
           SlideshowButton(
             source: 'Following'.tl,
             illusts: () => pageKeys[restrict]?.currentState?.loadedData ?? [],
+            resumeKey: () =>
+                pageKeys[restrict]?.currentState?.loadedDataIdentity,
             nextUrl: () =>
                 pageKeys[restrict]?.currentState?.nextUrl ??
                 '/v2/illust/follow?restrict=$restrict',

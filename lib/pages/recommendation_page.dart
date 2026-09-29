@@ -71,6 +71,8 @@ class _RecommendationPageState extends State<RecommendationPage> {
               source: 'Explore'.tl,
               illusts: () =>
                   artworkPageKeys[type].currentState?.loadedData ?? [],
+              resumeKey: () =>
+                  artworkPageKeys[type].currentState?.loadedDataIdentity,
               nextUrl: () =>
                   artworkPageKeys[type].currentState?.nextUrl ??
                   (type == 0

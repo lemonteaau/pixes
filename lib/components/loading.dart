@@ -143,6 +143,9 @@ abstract class MultiPageLoadingState<T extends StatefulWidget, S extends Object>
 
   List<S> get loadedData => List.unmodifiable(_data ?? <S>[]);
 
+  /// Stays the same while more pages load and changes on refresh or reset.
+  Object? get loadedDataIdentity => _data;
+
   String? _error;
 
   int _page = 1;
