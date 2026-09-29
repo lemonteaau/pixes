@@ -14,7 +14,7 @@ import 'dart:ui' as ui;
 
 class UgoiraWidget extends StatefulWidget {
   const UgoiraWidget({super.key, required this.id, required this.previewImage,
-    required this.width, required this.height});
+    required this.width, required this.height, this.autoPlay = false});
 
   final String id;
 
@@ -23,6 +23,9 @@ class UgoiraWidget extends StatefulWidget {
   final double width;
 
   final double height;
+
+  /// Starts loading at once instead of waiting for a tap on the preview.
+  final bool autoPlay;
 
   @override
   State<UgoiraWidget> createState() => _UgoiraWidgetState();
@@ -40,6 +43,32 @@ class _UgoiraWidgetState extends State<UgoiraWidget> {
   int expectedBytes = 1;
 
   int receivedBytes = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoPlay) load();
+  }
+
+  @override
+  void dispose() {
+    // Frames are decoded per widget; free them with it.
+    for (final frame in _metadata?.frames ?? const <_UgoiraFrame>[]) {
+      frame.data?.dispose();
+      frame.data = null;
+    }
+    super.dispose();
+  }
+
+  /// Loading continues after the widget is gone, e.g. swiped away in a
+  /// slideshow, so the download still fills the cache.
+  void _set(VoidCallback fn) {
+    if (mounted) {
+      setState(fn);
+    } else {
+      fn();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -72,7 +101,7 @@ class _UgoiraWidgetState extends State<UgoiraWidget> {
                 size: 36,
               ),
             )),
-        if(!_loading)
+        if(!_loading && !widget.autoPlay)
           Positioned.fill(
             child: GestureDetector(
               onTap: load,
@@ -93,12 +122,12 @@ class _UgoiraWidgetState extends State<UgoiraWidget> {
   }
 
   void load() async {
-    setState(() {
+    _set(() {
       _loading = true;
     });
     var res0 = await Network().apiGet('/v1/ugoira/metadata?illust_id=${widget.id}');
     if(res0.error) {
-      setState(() {
+      _set(() {
         _error = true;
         _loading = false;
       });
@@ -143,7 +172,7 @@ class _UgoiraWidgetState extends State<UgoiraWidget> {
       var cachingFile = await CacheManager().openWrite(key);
       await for (var chunk in res.data!.stream) {
         await cachingFile.writeBytes(chunk);
-        setState(() {
+        _set(() {
           receivedBytes += chunk.length;
           if(receivedBytes > expectedBytes) {
             expectedBytes = receivedBytes + 1;
@@ -154,7 +183,7 @@ class _UgoiraWidgetState extends State<UgoiraWidget> {
       await extract(cachingFile.file.path);
     }
     catch(e) {
-      setState(() {
+      _set(() {
         _error = true;
         _loading = false;
       });
@@ -168,10 +197,15 @@ class _UgoiraWidgetState extends State<UgoiraWidget> {
       if(file.isFile) {
         var frame = _metadata!.frames.firstWhere((element) => element.fileName == file.name);
         frame.data = await decodeImageFromList(file.content);
+        if (!mounted) {
+          frame.data?.dispose();
+          frame.data = null;
+        }
       }
     }
     zip.clear();
-    setState(() {
+    if (!mounted) return;
+    _set(() {
       _loading = false;
       _finished = true;
     });

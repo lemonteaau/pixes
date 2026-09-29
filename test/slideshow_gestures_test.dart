@@ -361,8 +361,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(controller.playing, isFalse);
     expect(authorOpacity(), 1);
-    await tester.pump(const Duration(seconds: 10));
-    expect(authorOpacity(), 1);
+    // After a moment a paused slideshow leaves just the artwork on screen.
+    await tester.pump(const Duration(seconds: 2));
+    expect(authorOpacity(), 0);
+    expect(controller.playing, isFalse);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 200));
   });

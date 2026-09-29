@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:pixes/appdata.dart';
 import 'package:pixes/components/md.dart';
 import 'package:pixes/components/page_route.dart';
+import 'package:pixes/components/ugoira.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/foundation/image_provider.dart';
 import 'package:pixes/foundation/optimistic_toggle.dart';
@@ -19,6 +20,7 @@ import 'package:pixes/network/network.dart';
 import 'package:pixes/pages/comments_page.dart';
 import 'package:pixes/pages/illust_page.dart';
 import 'package:pixes/pages/user_info_page.dart';
+import 'package:pixes/utils/screen_awake.dart';
 import 'package:pixes/utils/translation.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:window_manager/window_manager.dart';
@@ -129,22 +131,20 @@ class _SlideshowPageState extends State<SlideshowPage>
           resumeAt == null ? _controller.next() : _controller.goTo(resumeAt));
     }
     _setImmersive(true);
+    // Paused or not, the screen stays on while the slideshow is open.
+    unawaited(ScreenAwake.setEnabled(true));
     _updateCountdown();
     _wasPlaying = _controller.playing;
     _showControls();
   }
 
-  /// Shows the controls; while playing they fade out again after [delay].
+  /// Shows the controls, which fade out again after [delay] so the artwork
+  /// is left on its own, whether playing or paused.
   void _showControls({Duration delay = _controlsIdleDuration}) {
     _hideTimer?.cancel();
     if (!_controlsVisible && mounted) setState(() => _controlsVisible = true);
-    if (!_controller.playing) return;
     _hideTimer = Timer(delay, () {
-      if (mounted &&
-          _controller.playing &&
-          !_touching &&
-          !_scrolling &&
-          !_sheetOpen) {
+      if (mounted && !_touching && !_scrolling && !_sheetOpen) {
         setState(() => _controlsVisible = false);
       }
     });
@@ -174,7 +174,7 @@ class _SlideshowPageState extends State<SlideshowPage>
     _updateCountdown();
     if (_controller.playing != _wasPlaying) {
       _wasPlaying = _controller.playing;
-      // Pausing brings the controls back; resuming lets them fade out soon.
+      // Pausing or resuming shows the controls, then leaves just the artwork.
       _showControls(delay: const Duration(milliseconds: 1500));
     }
     setState(() {});
@@ -364,9 +364,11 @@ class _SlideshowPageState extends State<SlideshowPage>
   Future<void> _open(Route<void> route) async {
     _controller.setActive(false);
     _setImmersive(false);
+    unawaited(ScreenAwake.setEnabled(false));
     await Navigator.of(context).push(route);
     if (!mounted) return;
     _setImmersive(true);
+    unawaited(ScreenAwake.setEnabled(true));
     _controller.setActive(true);
   }
 
@@ -444,6 +446,7 @@ class _SlideshowPageState extends State<SlideshowPage>
   void dispose() {
     _saveSession();
     _setImmersive(false);
+    unawaited(ScreenAwake.setEnabled(false));
     WidgetsBinding.instance.removeObserver(this);
     _tapTimer?.cancel();
     _messageTimer?.cancel();
@@ -741,18 +744,22 @@ class _SlideshowPageState extends State<SlideshowPage>
       bottom: bottom,
       height: 3,
       child: IgnorePointer(
-        child: _controller.busy
-            ? const _LoadingLine()
-            : AnimatedBuilder(
-                animation: _countdown,
-                builder: (context, _) => CustomPaint(
-                  key: const ValueKey('slideshow-progress'),
-                  painter: SlideshowProgressPainter(
-                    _countdown.value,
-                    paused: !_controller.playing,
+        child: AnimatedOpacity(
+          opacity: _controller.playing || _controlsVisible ? 1 : 0,
+          duration: _overlayFadeDuration,
+          child: _controller.busy
+              ? const _LoadingLine()
+              : AnimatedBuilder(
+                  animation: _countdown,
+                  builder: (context, _) => CustomPaint(
+                    key: const ValueKey('slideshow-progress'),
+                    painter: SlideshowProgressPainter(
+                      _countdown.value,
+                      paused: !_controller.playing,
+                    ),
                   ),
                 ),
-              ),
+        ),
       ),
     );
   }
@@ -812,11 +819,11 @@ class _SlideshowPageState extends State<SlideshowPage>
                       IgnorePointer(
                         child: Center(
                           child: AnimatedOpacity(
-                            opacity: !_controller.playing
-                                ? 1
-                                : _controlsVisible
+                            opacity: !_controlsVisible
+                                ? 0
+                                : _controller.playing
                                     ? 0.7
-                                    : 0,
+                                    : 1,
                             duration: _overlayFadeDuration,
                             child: Container(
                               width: 88,
@@ -1549,12 +1556,36 @@ class _ArtworkPagerState extends State<_ArtworkPager> {
             gaplessPlayback: true,
           );
         }
-        return RawImage(
+        final still = RawImage(
           key: ValueKey(slide.url),
           image: original,
           fit: BoxFit.contain,
           filterQuality: FilterQuality.high,
         );
+        if (!slide.illust.isUgoira) return still;
+        // The original is only the first frame; play the animation over it.
+        return Stack(fit: StackFit.expand, children: [
+          still,
+          LayoutBuilder(builder: (context, constraints) {
+            final size = applyBoxFit(
+              BoxFit.contain,
+              Size(slide.illust.width.toDouble(),
+                  slide.illust.height.toDouble()),
+              constraints.biggest,
+            ).destination;
+            return Center(
+              child: UgoiraWidget(
+                key: ValueKey('ugoira:${slide.illust.id}'),
+                id: slide.illust.id.toString(),
+                previewImage:
+                    CachedImageProvider(slide.illust.images[slide.page].large),
+                width: size.width,
+                height: size.height,
+                autoPlay: true,
+              ),
+            );
+          }),
+        ]);
       },
     );
   }
