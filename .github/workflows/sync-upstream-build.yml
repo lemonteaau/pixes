@@ -108,11 +108,22 @@ jobs:
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE }}
+          KEY_PROPERTIES: ${{ secrets.ANDROID_KEY_PROPERTIES }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
-            echo "::error::Set the ANDROID_KEYSTORE (base64 .jks), ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_ALIAS repository secrets. Without a fixed key every build gets a random signature and cannot update the installed app."
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Set the ANDROID_KEYSTORE repository secret (base64 .jks) plus either ANDROID_KEY_PROPERTIES or ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_ALIAS. Without a fixed key every build gets a random signature and cannot update the installed app."
+            exit 1
+          fi
+          if [ -n "$KEY_PROPERTIES" ]; then
+            # Same layout as upstream's main.yml, so its secrets work unchanged.
+            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/keystore.jks
+            printf '%s\n' "$KEY_PROPERTIES" > android/key.properties
+            exit 0
+          fi
+          if [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
+            echo "::error::ANDROID_KEY_PROPERTIES is not set, so ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_ALIAS are required."
             exit 1
           fi
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/app/key.jks
