@@ -1,30 +1,88 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
+import 'package:fluent_ui/fluent_ui.dart' hide TitleBar;
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:pixes/main.dart';
+import 'package:pixes/appdata.dart';
+import 'package:pixes/components/slideshow_button.dart';
+import 'package:pixes/components/title_bar.dart';
+import 'package:pixes/pages/slideshow_page.dart';
+import 'package:pixes/utils/translation.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    await Translation.init();
+    appdata.settings['language'] = '简体中文';
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  testWidgets('feed action opens slideshow and closes back to the feed',
+      (tester) async {
+    await tester.pumpWidget(FluentApp(
+      home: Center(
+        child: SlideshowButton(
+          source: '关注',
+          illusts: () => [],
+          nextUrl: () => null,
+        ),
+      ),
+    ));
+    await tester.tap(find.byIcon(FluentIcons.play));
+    await tester.pumpAndSettle();
+    expect(find.byType(SlideshowPage), findsOneWidget);
+    expect(find.text('关注 · 自动播放'), findsOneWidget);
+    expect(find.text('没有可播放的公开图片'), findsOneWidget);
+    expect(find.text('5 秒 / 张'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byIcon(FluentIcons.back));
+    await tester.pumpAndSettle();
+    expect(find.byType(SlideshowPage), findsNothing);
+    expect(find.byIcon(FluentIcons.play), findsOneWidget);
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  testWidgets('slideshow controls fit a narrow phone in portrait and landscape',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    for (final size in [const Size(320, 640), const Size(640, 320)]) {
+      tester.view.physicalSize = size;
+      await tester.pumpWidget(const FluentApp(
+        home: SlideshowPage(illusts: [], nextUrl: null, source: '推荐'),
+      ));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('slideshow-countdown')), findsOneWidget);
+    }
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('feed title and playback action stay visible on narrow screens',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 640);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    await tester.pumpWidget(FluentApp(
+      home: Column(
+        children: [
+          TitleBar(
+            title: '关注',
+            wrapActions: true,
+            onRefresh: () {},
+            action: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SlideshowButton(
+                  source: '关注',
+                  illusts: () => [],
+                  nextUrl: () => null,
+                ),
+                const SizedBox(width: 300, child: Text('全部 公开 私人')),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byIcon(FluentIcons.play).hitTestable(), findsOneWidget);
   });
 }

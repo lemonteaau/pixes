@@ -263,7 +263,7 @@ class Network {
     if (res.success) {
       return Res(
           (res.data["illusts"] as List).map((e) => Illust.fromJson(e)).toList(),
-          subData: recommendationUrl);
+          subData: res.data["next_url"]);
     } else {
       return Res.error(res.errorMessage);
     }

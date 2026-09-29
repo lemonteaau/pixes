@@ -3,7 +3,7 @@ import 'package:pixes/network/models.dart';
 
 List<Illust> checkIllusts(List<Illust> illusts) {
   illusts.removeWhere((illust) {
-    if (illust.isBlocked) {
+    if (illust.isBlocked || !illust.isAvailable) {
       return true;
     }
     if (appdata.settings["blockTags"] == null) {

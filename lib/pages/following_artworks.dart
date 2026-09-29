@@ -6,6 +6,7 @@ import 'package:pixes/utils/block.dart';
 import 'package:pixes/utils/translation.dart';
 
 import '../components/batch_download.dart';
+import '../components/slideshow_button.dart';
 import '../components/illust_widget.dart';
 import '../components/loading.dart';
 import '../components/segmented_button.dart';
@@ -40,10 +41,20 @@ class _FollowingArtworksPageState extends State<FollowingArtworksPage> {
 
   Widget buildTab() {
     return TitleBar(
+      wrapActions: true,
       title: "Following".tl,
       onRefresh: () => pageKey.currentState?.refresh(),
       action: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
+          SlideshowButton(
+            source: 'Following'.tl,
+            illusts: () => pageKey.currentState?.loadedData ?? [],
+            nextUrl: () =>
+                pageKey.currentState?.nextUrl ??
+                '/v2/illust/follow?restrict=$restrict',
+          ),
+          const SizedBox(width: 8),
           BatchDownloadButton(
               request: () => Network().getFollowingArtworks(restrict)),
           const SizedBox(
@@ -100,23 +111,23 @@ class _OneFollowingPageState
   Widget buildContent(BuildContext context, List<Illust> data) {
     checkIllusts(data);
     return withRefresh(MasonryGridView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 8) +
-            EdgeInsets.only(bottom: context.padding.bottom),
-        physics: const AlwaysScrollableScrollPhysics(),
-        gridDelegate: const SliverSimpleGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 240,
-        ),
-        itemCount: data.length,
-        itemBuilder: (context, index) {
-          if (index == data.length - 1) {
-            nextPage();
-          }
-          return IllustWidget(data[index], onTap: () {
-            context.to(() => IllustGalleryPage(
-                illusts: data, initialPage: index, nextUrl: nextUrl));
-          });
-        },
-      ));
+      padding: const EdgeInsets.symmetric(horizontal: 8) +
+          EdgeInsets.only(bottom: context.padding.bottom),
+      physics: const AlwaysScrollableScrollPhysics(),
+      gridDelegate: const SliverSimpleGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 240,
+      ),
+      itemCount: data.length,
+      itemBuilder: (context, index) {
+        if (index == data.length - 1) {
+          nextPage();
+        }
+        return IllustWidget(data[index], onTap: () {
+          context.to(() => IllustGalleryPage(
+              illusts: data, initialPage: index, nextUrl: nextUrl));
+        });
+      },
+    ));
   }
 
   String? nextUrl;

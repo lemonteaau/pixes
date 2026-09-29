@@ -186,6 +186,25 @@ class Illust {
   final bool isAi;
   final bool isUgoira;
   final bool isBlocked;
+  final bool isVisible;
+
+  /// Non-public works and Pixiv's replacement images must never be played.
+  bool get isAvailable =>
+      isVisible &&
+      restrict == 0 &&
+      images.any(
+        (image) => isOriginalImageUrl(image.original),
+      );
+
+  static bool isOriginalImageUrl(String url) {
+    final uri = Uri.tryParse(url);
+    return uri != null &&
+        (uri.scheme == 'https' || uri.scheme == 'http') &&
+        uri.host.isNotEmpty &&
+        !uri.path.contains('/common/images/') &&
+        !uri.path.contains('limit_unknown') &&
+        !uri.path.contains('limit_mypixiv');
+  }
 
   bool get isR18 => tags.contains(const Tag("R-18", null));
 
@@ -197,19 +216,19 @@ class Illust {
         type = json['type'],
         images = (() {
           List<IllustImage> images = [];
-          for (var i in json['meta_pages']) {
+          for (var i in json['meta_pages'] ?? []) {
             images.add(IllustImage(
                 i['image_urls']['square_medium'],
                 i['image_urls']['medium'],
                 i['image_urls']['large'],
-                i['image_urls']['original']));
+                i['image_urls']['original'] ?? ''));
           }
           if (images.isEmpty) {
             images.add(IllustImage(
                 json['image_urls']['square_medium'],
                 json['image_urls']['medium'],
                 json['image_urls']['large'],
-                json['meta_single_page']['original_image_url']));
+                json['meta_single_page']?['original_image_url'] ?? ''));
           }
           return images;
         }()),
@@ -233,7 +252,10 @@ class Illust {
         isBookmarked = json['is_bookmarked'],
         isAi = json['illust_ai_type'] == 2,
         isUgoira = json['type'] == "ugoira",
-        isBlocked = json['is_muted'] ?? false;
+        isBlocked = json['is_muted'] ?? false,
+        isVisible = json['visible'] != false &&
+            json['is_mypixiv_only'] != true &&
+            json['is_x_restricted'] != true;
 }
 
 class TrendingTag {

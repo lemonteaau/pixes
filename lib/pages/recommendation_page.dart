@@ -10,6 +10,7 @@ import 'package:pixes/utils/block.dart';
 import 'package:pixes/utils/translation.dart';
 
 import '../components/grid.dart';
+import '../components/slideshow_button.dart';
 import '../components/segmented_button.dart';
 import '../components/user_preview.dart';
 
@@ -46,6 +47,7 @@ class _RecommendationPageState extends State<RecommendationPage> {
 
   Widget buildTab() {
     return TitleBar(
+      wrapActions: true,
       title: "Explore".tl,
       onRefresh: () {
         if (type != 2) {
@@ -54,20 +56,37 @@ class _RecommendationPageState extends State<RecommendationPage> {
           userPageKey.currentState?.refresh();
         }
       },
-      action: SegmentedButton<int>(
-        options: [
-          SegmentedButtonOption(0, "Illustrations".tl),
-          SegmentedButtonOption(1, "Mangas".tl),
-          SegmentedButtonOption(2, "Users".tl),
+      action: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (type != 2) ...[
+            SlideshowButton(
+              source: 'Explore'.tl,
+              illusts: () => artworkPageKey.currentState?.loadedData ?? [],
+              nextUrl: () =>
+                  artworkPageKey.currentState?.nextUrl ??
+                  (type == 0
+                      ? Network.recommendationUrl
+                      : '/v1/manga/recommended?filter=for_android&include_ranking_illusts=true&include_privacy_policy=true'),
+            ),
+            const SizedBox(width: 8),
+          ],
+          SegmentedButton<int>(
+            options: [
+              SegmentedButtonOption(0, "Illustrations".tl),
+              SegmentedButtonOption(1, "Mangas".tl),
+              SegmentedButtonOption(2, "Users".tl),
+            ],
+            onPressed: (key) {
+              if (key != type) {
+                setState(() {
+                  type = key;
+                });
+              }
+            },
+            value: type,
+          ),
         ],
-        onPressed: (key) {
-          if (key != type) {
-            setState(() {
-              type = key;
-            });
-          }
-        },
-        value: type,
       ),
     );
   }
@@ -89,6 +108,7 @@ class _RecommendationArtworksPageState
   void didUpdateWidget(covariant _RecommendationArtworksPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.type != widget.type) {
+      nextUrl = null;
       reset();
     }
   }
@@ -97,36 +117,49 @@ class _RecommendationArtworksPageState
   Widget buildContent(BuildContext context, final List<Illust> data) {
     checkIllusts(data);
     return withRefresh(MasonryGridView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 8) +
-            EdgeInsets.only(bottom: context.padding.bottom),
-        physics: const AlwaysScrollableScrollPhysics(),
-        gridDelegate: const SliverSimpleGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 240,
-        ),
-        itemCount: data.length,
-        itemBuilder: (context, index) {
-          if (index == data.length - 1) {
-            nextPage();
-          }
-          return IllustWidget(
-            data[index],
-            onTap: () {
-              context.to(() => IllustGalleryPage(
-                    illusts: data,
-                    initialPage: index,
-                    nextUrl: Network.recommendationUrl,
-                  ));
-            },
-          );
-        },
-      ));
+      padding: const EdgeInsets.symmetric(horizontal: 8) +
+          EdgeInsets.only(bottom: context.padding.bottom),
+      physics: const AlwaysScrollableScrollPhysics(),
+      gridDelegate: const SliverSimpleGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 240,
+      ),
+      itemCount: data.length,
+      itemBuilder: (context, index) {
+        if (index == data.length - 1) {
+          nextPage();
+        }
+        return IllustWidget(
+          data[index],
+          onTap: () {
+            context.to(() => IllustGalleryPage(
+                  illusts: data,
+                  initialPage: index,
+                  nextUrl: nextUrl,
+                ));
+          },
+        );
+      },
+    ));
+  }
+
+  String? nextUrl;
+
+  @override
+  Future<void> refresh() {
+    nextUrl = null;
+    return super.refresh();
   }
 
   @override
-  Future<Res<List<Illust>>> loadData(page) {
-    return widget.type == 0
-        ? Network().getRecommendedIllusts()
-        : Network().getRecommendedMangas();
+  Future<Res<List<Illust>>> loadData(page) async {
+    if (nextUrl == 'end') return Res.error('No more data');
+    final result = nextUrl != null
+        ? await Network().getIllustsWithNextUrl(nextUrl!)
+        : widget.type == 0
+            ? await Network().getRecommendedIllusts()
+            : await Network().getRecommendedMangas();
+    if (result.success) nextUrl = result.subData ?? 'end';
+    return result;
   }
 }
 

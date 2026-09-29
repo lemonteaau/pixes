@@ -141,7 +141,9 @@ typedef FileDecoderCallback = Future<ui.Codec> Function(Uint8List);
 class CachedImageProvider extends BaseImageProvider<CachedImageProvider> {
   final String url;
 
-  CachedImageProvider(this.url);
+  final CancelToken? cancelToken;
+
+  CachedImageProvider(this.url, {this.cancelToken});
 
   @override
   String get key => url;
@@ -165,6 +167,7 @@ class CachedImageProvider extends BaseImageProvider<CachedImageProvider> {
         DateFormat("yyyy-MM-dd'T'HH:mm:ss'+00:00'").format(DateTime.now());
     final hash = md5.convert(utf8.encode(time + Network.hashSalt)).toString();
     var res = await dio.get<ResponseBody>(url,
+        cancelToken: cancelToken,
         options: Options(
             responseType: ResponseType.stream,
             validateStatus: (status) => status != null && status < 500,
@@ -180,19 +183,24 @@ class CachedImageProvider extends BaseImageProvider<CachedImageProvider> {
     }
     var data = <int>[];
     var cachingFile = await CacheManager().openWrite(key);
-    await for (var chunk in res.data!.stream) {
-      var length = res.data!.contentLength + 1;
-      if (length < data.length) {
-        length = data.length + 1;
+    try {
+      await for (var chunk in res.data!.stream) {
+        var length = res.data!.contentLength + 1;
+        if (length < data.length) {
+          length = data.length + 1;
+        }
+        data.addAll(chunk);
+        await cachingFile.writeBytes(chunk);
+        chunkEvents.add(ImageChunkEvent(
+          cumulativeBytesLoaded: data.length,
+          expectedTotalBytes: length,
+        ));
       }
-      data.addAll(chunk);
-      await cachingFile.writeBytes(chunk);
-      chunkEvents.add(ImageChunkEvent(
-        cumulativeBytesLoaded: data.length,
-        expectedTotalBytes: length,
-      ));
+      await cachingFile.close();
+    } catch (_) {
+      await cachingFile.cancel();
+      rethrow;
     }
-    await cachingFile.close();
     return Uint8List.fromList(data);
   }
 

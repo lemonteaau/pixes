@@ -2,7 +2,9 @@ import 'package:fluent_ui/fluent_ui.dart' hide TitleBar;
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:pixes/components/batch_download.dart';
 import 'package:pixes/components/segmented_button.dart';
+import 'package:pixes/components/slideshow_button.dart';
 import 'package:pixes/components/title_bar.dart';
+import 'package:pixes/appdata.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/network/network.dart';
 import 'package:pixes/pages/illust_page.dart';
@@ -43,6 +45,14 @@ class _BookMarkedArtworkPageState extends State<BookMarkedArtworkPage> {
       onRefresh: () => pageKey.currentState?.refresh(),
       action: Row(
         children: [
+          SlideshowButton(
+            source: 'Bookmarks'.tl,
+            illusts: () => pageKey.currentState?.loadedData ?? [],
+            nextUrl: () =>
+                pageKey.currentState?.nextUrl ??
+                '/v1/user/bookmarks/illust?user_id=${appdata.account?.user.id}&restrict=$restrict',
+          ),
+          const SizedBox(width: 8),
           BatchDownloadButton(
               request: () => Network().getBookmarkedIllusts(restrict)),
           const SizedBox(
@@ -97,26 +107,26 @@ class _OneBookmarkedPageState
   @override
   Widget buildContent(BuildContext context, final List<Illust> data) {
     return withRefresh(MasonryGridView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 8) +
-            EdgeInsets.only(bottom: context.padding.bottom),
-        physics: const AlwaysScrollableScrollPhysics(),
-        gridDelegate: const SliverSimpleGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 240,
-        ),
-        itemCount: data.length,
-        itemBuilder: (context, index) {
-          if (index == data.length - 1) {
-            nextPage();
-          }
-          return IllustWidget(
-            data[index],
-            onTap: () {
-              context.to(() => IllustGalleryPage(
-                  illusts: data, initialPage: index, nextUrl: nextUrl));
-            },
-          );
-        },
-      ));
+      padding: const EdgeInsets.symmetric(horizontal: 8) +
+          EdgeInsets.only(bottom: context.padding.bottom),
+      physics: const AlwaysScrollableScrollPhysics(),
+      gridDelegate: const SliverSimpleGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 240,
+      ),
+      itemCount: data.length,
+      itemBuilder: (context, index) {
+        if (index == data.length - 1) {
+          nextPage();
+        }
+        return IllustWidget(
+          data[index],
+          onTap: () {
+            context.to(() => IllustGalleryPage(
+                illusts: data, initialPage: index, nextUrl: nextUrl));
+          },
+        );
+      },
+    ));
   }
 
   String? nextUrl;

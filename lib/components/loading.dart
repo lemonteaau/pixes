@@ -129,6 +129,8 @@ abstract class MultiPageLoadingState<T extends StatefulWidget, S extends Object>
 
   List<S>? _data;
 
+  List<S> get loadedData => List.unmodifiable(_data ?? <S>[]);
+
   String? _error;
 
   int _page = 1;
