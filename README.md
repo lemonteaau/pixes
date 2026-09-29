@@ -1,44 +1,28 @@
-# pixes
+<div align="center">
+    <img width="160" height="160" src="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png">
+    <h1>pixes（个人分支）</h1>
+    <p>基于 <a href="https://github.com/wgh136/pixes">pixes</a> 的 Pixiv 第三方客户端，自动跟进上游更新。</p>
+</div>
 
-[![flutter](https://img.shields.io/badge/flutter-3.32.5-blue)](https://flutter.dev/) 
-[![License](https://img.shields.io/github/license/wgh136/pixes)](https://github.com/wgh136/pixes/blob/master/LICENSE)
-[![Download](https://img.shields.io/github/v/release/wgh136/pixes)](https://github.com/wgh136/pixes)
-[![stars](https://img.shields.io/github/stars/wgh136/pixes)](https://github.com/wgh136/pixes/stargazers)
+## 和上游的区别
 
-Unofficial Pixiv app, support Windows, Android, iOS, macOS, linux
+- **自动播放**：在探索、收藏、关注页点右上角的播放按钮，全屏逐张浏览，上下滑切换作品，左右滑翻多图。播放时操作层自动隐藏；单击暂停，双击点赞，长按调速度。
+- **小说自动滚动**：阅读时可开启，速度可调，滚动期间屏幕保持常亮。
+- **切换不刷新**：在侧边栏各页面或页内的分类之间来回切换时，内容和滚动位置都会保留，不会重新加载。
+- **点赞、收藏、关注即时生效**：点击后立刻更新，请求在后台发送，失败时恢复原状并提示。
+- 若干界面修复：手机上顶部栏遮挡页面、窄屏标题溢出、小说推荐翻页重复、侧边栏图标调整等。
 
-All main features are implemented.
+其余功能和上游一致，使用说明请看[上游项目](https://github.com/wgh136/pixes)。
 
-## Download
+## 下载
 
-Download from [Release](https://github.com/wgh136/pixes/releases)
+到 [Releases](../../releases) 下载：
 
-## Build from source
+- Android：一般手机选 `pixes-<版本>-arm64-v8a.apk`
+- iOS：`pixes-custom-ios-unsigned.ipa`，未签名，需要自己签名安装
 
-### Install Flutter
+上游每次更新后会自动合并并重新构建，版本号形如 `1.2.3-fork.7`。
 
-View [Flutter Document](https://flutter.dev/docs/get-started/install)
+## 许可
 
-### Build Android
-
-Put your keystore file (`key.jks`, `key.properties`) in `android/`
-
-Run `flutter build apk`
-
-### Build iOS/Windows/macOS
-
-Run `flutter build ios/windows/macos`
-
-### Build Linux
-
-Use`python3 debian/build.py {ARCH}` to build deb package. Replace {ARCH} with `x64` or `arm64`.
-
-For other linux distributions, you can use `flutter build linux` to build. 
-You must register the `pixiv` scheme in the `.desktop` file, otherwise the login will not work.
-
-## Screenshots
-
-<img src="screenshots/1.png" style="width: 400px">
-<img src="screenshots/2.png" style="width: 400px">
-<img src="screenshots/3.png" style="width: 400px">
-<img src="screenshots/4.png" style="width: 400px">
+与上游相同，采用 [MIT](LICENSE) 许可。

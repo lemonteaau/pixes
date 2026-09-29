@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+    paths-ignore:
+      - README.md
   schedule:
     - cron: "41 * * * *"
   workflow_dispatch:
@@ -46,6 +48,8 @@ jobs:
           git fetch upstream master
 
           before="$(git rev-parse HEAD)"
+          # The fork keeps its own README (.gitattributes: merge=ours).
+          git config merge.ours.driver true
           git merge --no-edit upstream/master
           after="$(git rev-parse HEAD)"
           upstream_commit="$(git rev-parse upstream/master)"
