@@ -18,7 +18,7 @@ class NovelRecommendationPage extends StatefulWidget {
 class _NovelRecommendationPageState
     extends MultiPageLoadingState<NovelRecommendationPage, Novel> {
   @override
-  Widget buildContent(BuildContext context, List<Novel> data) {
+  Widget? buildFrame(BuildContext context, Widget child) {
     return Column(
       children: [
         TitleBar(
@@ -26,24 +26,44 @@ class _NovelRecommendationPageState
           onRefresh: refresh,
         ),
         Expanded(
-          child: withRefresh(GridViewWithFixedItemHeight(
-            itemCount: data.length,
-            itemHeight: 164,
-            minCrossAxisExtent: 400,
-            builder: (context, index) {
-              if (index == data.length - 1) {
-                nextPage();
-              }
-              return NovelWidget(data[index]);
-            },
-          ).paddingHorizontal(8)),
+          child: child,
         )
       ],
     );
   }
 
   @override
-  Future<Res<List<Novel>>> loadData(int page) {
-    return Network().getRecommendNovels();
+  Widget buildContent(BuildContext context, List<Novel> data) {
+    return withRefresh(GridViewWithFixedItemHeight(
+      itemCount: data.length,
+      itemHeight: 164,
+      minCrossAxisExtent: 400,
+      builder: (context, index) {
+        if (index == data.length - 1) {
+          nextPage();
+        }
+        return NovelWidget(data[index]);
+      },
+    ).paddingHorizontal(8));
+  }
+
+  String? nextUrl;
+
+  @override
+  Future<void> refresh() {
+    nextUrl = null;
+    return super.refresh();
+  }
+
+  @override
+  Future<Res<List<Novel>>> loadData(int page) async {
+    if (nextUrl == "end") return Res.error("No more data");
+    var res = nextUrl == null
+        ? await Network().getRecommendNovels()
+        : await Network().getNovelsWithNextUrl(nextUrl!);
+    if (!res.error) {
+      nextUrl = res.subData ?? "end";
+    }
+    return res;
   }
 }

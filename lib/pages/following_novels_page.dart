@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart' hide TitleBar;
 import 'package:pixes/components/grid.dart';
+import 'package:pixes/components/lazy_indexed_stack.dart';
 import 'package:pixes/components/loading.dart';
 import 'package:pixes/components/novel.dart';
 import 'package:pixes/components/segmented_button.dart';
@@ -15,17 +16,17 @@ class FollowingNovelsPage extends StatefulWidget {
   State<FollowingNovelsPage> createState() => _FollowingNovelsPageState();
 }
 
-class _FollowingNovelsPageState
-    extends MultiPageLoadingState<FollowingNovelsPage, Novel> {
+class _FollowingNovelsPageState extends State<FollowingNovelsPage> {
   bool public = true;
+  final pageKeys = <bool, GlobalKey<_OneFollowingNovelsPageState>>{};
 
   @override
-  Widget? buildFrame(BuildContext context, Widget child) {
+  Widget build(BuildContext context) {
     return Column(
       children: [
         TitleBar(
           title: "Following".tl,
-          onRefresh: refresh,
+          onRefresh: () => pageKeys[public]?.currentState?.refresh(),
           action: SegmentedButton(
             options: [
               SegmentedButtonOption("public", "Public".tl),
@@ -34,40 +35,53 @@ class _FollowingNovelsPageState
             onPressed: (key) {
               var newPublic = key == "public";
               if (newPublic != public) {
-                public = newPublic;
-                nextUrl = null;
-                reset();
+                setState(() {
+                  public = newPublic;
+                });
               }
             },
             value: public ? "public" : "private",
           ),
         ),
         Expanded(
-          child: child,
+          child: LazyIndexedStack<bool>(
+            current: public,
+            builder: (context, public) => _OneFollowingNovelsPage(
+              public,
+              key: pageKeys.putIfAbsent(public, GlobalKey.new),
+            ),
+          ),
         )
       ],
     );
   }
+}
+
+class _OneFollowingNovelsPage extends StatefulWidget {
+  const _OneFollowingNovelsPage(this.public, {super.key});
+
+  final bool public;
 
   @override
+  State<_OneFollowingNovelsPage> createState() =>
+      _OneFollowingNovelsPageState();
+}
+
+class _OneFollowingNovelsPageState
+    extends MultiPageLoadingState<_OneFollowingNovelsPage, Novel> {
+  @override
   Widget buildContent(BuildContext context, List<Novel> data) {
-    return Column(
-      children: [
-        Expanded(
-          child: withRefresh(GridViewWithFixedItemHeight(
-            itemCount: data.length,
-            itemHeight: 164,
-            minCrossAxisExtent: 400,
-            builder: (context, index) {
-              if (index == data.length - 1) {
-                nextPage();
-              }
-              return NovelWidget(data[index]);
-            },
-          ).paddingHorizontal(8)),
-        )
-      ],
-    );
+    return withRefresh(GridViewWithFixedItemHeight(
+      itemCount: data.length,
+      itemHeight: 164,
+      minCrossAxisExtent: 400,
+      builder: (context, index) {
+        if (index == data.length - 1) {
+          nextPage();
+        }
+        return NovelWidget(data[index]);
+      },
+    ).paddingHorizontal(8));
   }
 
   String? nextUrl;
@@ -82,9 +96,12 @@ class _FollowingNovelsPageState
   Future<Res<List<Novel>>> loadData(int page) async {
     if (nextUrl == "end") return Res.error("No more data");
     var res = nextUrl == null
-        ? await Network().getFollowingNovels(public ? "public" : "private")
+        ? await Network()
+            .getFollowingNovels(widget.public ? "public" : "private")
         : await Network().getNovelsWithNextUrl(nextUrl!);
-    nextUrl = res.subData ?? "end";
+    if (!res.error) {
+      nextUrl = res.subData ?? "end";
+    }
     return res;
   }
 }

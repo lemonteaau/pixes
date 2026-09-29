@@ -7,6 +7,7 @@ import 'package:pixes/utils/translation.dart';
 
 import '../components/batch_download.dart';
 import '../components/illust_widget.dart';
+import '../components/lazy_indexed_stack.dart';
 import '../components/loading.dart';
 import '../components/segmented_button.dart';
 import '../network/network.dart';
@@ -21,7 +22,7 @@ class FollowingArtworksPage extends StatefulWidget {
 
 class _FollowingArtworksPageState extends State<FollowingArtworksPage> {
   String restrict = "all";
-  final pageKey = GlobalKey<_OneFollowingPageState>();
+  final pageKeys = <String, GlobalKey<_OneFollowingPageState>>{};
 
   @override
   Widget build(BuildContext context) {
@@ -29,9 +30,12 @@ class _FollowingArtworksPageState extends State<FollowingArtworksPage> {
       children: [
         buildTab(),
         Expanded(
-          child: _OneFollowingPage(
-            restrict,
-            key: pageKey,
+          child: LazyIndexedStack<String>(
+            current: restrict,
+            builder: (context, restrict) => _OneFollowingPage(
+              restrict,
+              key: pageKeys.putIfAbsent(restrict, GlobalKey.new),
+            ),
           ),
         )
       ],
@@ -41,7 +45,7 @@ class _FollowingArtworksPageState extends State<FollowingArtworksPage> {
   Widget buildTab() {
     return TitleBar(
       title: "Following".tl,
-      onRefresh: () => pageKey.currentState?.refresh(),
+      onRefresh: () => pageKeys[restrict]?.currentState?.refresh(),
       action: Row(
         children: [
           BatchDownloadButton(
@@ -81,15 +85,6 @@ class _OneFollowingPage extends StatefulWidget {
 
 class _OneFollowingPageState
     extends MultiPageLoadingState<_OneFollowingPage, Illust> {
-  @override
-  void didUpdateWidget(covariant _OneFollowingPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.restrict != widget.restrict) {
-      nextUrl = null;
-      reset();
-    }
-  }
-
   @override
   Future<void> refresh() {
     nextUrl = null;

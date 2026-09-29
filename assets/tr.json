@@ -1,5 +1,6 @@
 {
     "zh_CN": {
+        "Refresh": "刷新",
         "Search": "搜索",
         "Downloading": "下载中",
         "Downloaded": "已下载",
@@ -194,6 +195,7 @@
         "No results found": "未找到结果"
     },
     "zh_TW": {
+        "Refresh": "重新整理",
         "Search": "搜索",
         "Downloading": "下載中",
         "Downloaded": "已下載",
@@ -388,6 +390,7 @@
         "No results found": "未找到結果"
     },
     "ko_KR": {
+        "Refresh": "새로고침",
         "Search": "검색",
         "Downloading": "다운로드 중",
         "Downloaded": "다운로드 완료",

@@ -4,12 +4,15 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/network/res.dart';
+import 'package:pixes/utils/translation.dart';
 
 Widget buildRefreshWrapper({
+  Key? key,
   required Widget child,
   required Future<void> Function() onRefresh,
 }) {
   return material.RefreshIndicator(
+    key: key,
     onRefresh: onRefresh,
     child: child,
   );
@@ -21,6 +24,13 @@ abstract class LoadingState<T extends StatefulWidget, S extends Object> extends 
   S? data;
 
   String? error;
+
+  int _generation = 0;
+
+  final _refreshIndicatorKey =
+      GlobalKey<material.RefreshIndicatorState>();
+
+  bool _refreshFromIndicator = false;
 
   Future<Res<S>> loadData();
 
@@ -34,52 +44,54 @@ abstract class LoadingState<T extends StatefulWidget, S extends Object> extends 
     );
   }
 
-  Future<void> retry() async {
-    setState(() {
-      isLoading = true;
-      error = null;
-    });
-    final value = await loadData();
-    if (!mounted) return;
-    if(value.success) {
+  Future<void> _load({required bool keepData}) async {
+    final generation = ++_generation;
+    if (!keepData || data == null) {
       setState(() {
-        isLoading = false;
-        data = value.data;
-      });
-    } else {
-      setState(() {
-        isLoading = false;
-        error = value.errorMessage!;
+        isLoading = true;
+        error = null;
+        data = null;
       });
     }
+    final value = await loadData();
+    if (!mounted || generation != _generation) return;
+    setState(() {
+      isLoading = false;
+      if (value.success) {
+        data = value.data;
+        error = null;
+      } else {
+        data = null;
+        error = value.errorMessage!;
+      }
+    });
   }
 
+  Future<void> retry() => _load(keepData: false);
+
+  /// Reloads while keeping the current content on screen.
   Future<void> refresh() {
-    return retry();
+    final indicator = _refreshIndicatorKey.currentState;
+    if (!_refreshFromIndicator && indicator != null && data != null) {
+      // Let the indicator drive the reload so the user sees progress.
+      return indicator.show();
+    }
+    _refreshFromIndicator = false;
+    return _load(keepData: true);
   }
 
   Widget withRefresh(Widget child) {
     return buildRefreshWrapper(
-      onRefresh: refresh,
-      child: child,
+      key: _refreshIndicatorKey,
+      onRefresh: () {
+        _refreshFromIndicator = true;
+        return refresh();
+      },
+      child: KeyedSubtree(
+        key: ValueKey(_generation),
+        child: child,
+      ),
     );
-  }
-
-  void _loadInitialData() {
-    loadData().then((value) {
-      if (!mounted) return;
-      if(value.success) {
-        setState(() {
-          isLoading = false;
-          data = value.data;
-        });
-      } else {
-        setState(() {
-          isLoading = false;
-          error = value.errorMessage!;
-        });
-      }
-    });
   }
 
   Widget buildError() {
@@ -91,7 +103,7 @@ abstract class LoadingState<T extends StatefulWidget, S extends Object> extends 
           const SizedBox(height: 12),
           Button(
             onPressed: retry,
-            child: const Text("Retry"),
+            child: Text("Retry".tl),
           )
         ],
       ),
@@ -101,9 +113,9 @@ abstract class LoadingState<T extends StatefulWidget, S extends Object> extends 
   @override
   @mustCallSuper
   void initState() {
-    isLoading = true;
-    _loadInitialData();
     super.initState();
+    isLoading = true;
+    _load(keepData: false);
   }
 
   @override
@@ -133,7 +145,15 @@ abstract class MultiPageLoadingState<T extends StatefulWidget, S extends Object>
 
   int _page = 1;
 
-  Completer<void>? _refreshCompleter;
+  /// Bumped whenever the list restarts, so responses of older requests are dropped.
+  int _generation = 0;
+
+  bool _keepDataOnReset = false;
+
+  bool _refreshFromIndicator = false;
+
+  final _refreshIndicatorKey =
+      GlobalKey<material.RefreshIndicatorState>();
 
   Future<Res<List<S>>> loadData(int page);
 
@@ -146,9 +166,11 @@ abstract class MultiPageLoadingState<T extends StatefulWidget, S extends Object>
   bool get isFirstLoading => _isFirstLoading;
 
   void nextPage() {
-    if(_isLoading) return;
+    if(_isLoading || _isFirstLoading || _data == null) return;
     _isLoading = true;
+    final generation = _generation;
     loadData(_page).then((value) {
+      if (!mounted || generation != _generation) return;
       _isLoading = false;
       if(value.success) {
         _page++;
@@ -163,50 +185,85 @@ abstract class MultiPageLoadingState<T extends StatefulWidget, S extends Object>
         if(message.length > 20) {
           message = "${message.substring(0, 20)}...";
         }
-        if (mounted) {
-          context.showToast(message: message);
-        }
+        context.showToast(message: message);
       }
     });
   }
 
+  /// Restarts from the first page. Subclasses override this to clear their own
+  /// paging state, so [refresh] goes through it as well.
   void reset() {
+    final keepData = _keepDataOnReset && _data != null && _error == null;
+    _generation++;
     setState(() {
-      _isFirstLoading = true;
-      _isLoading = false;
-      _data = null;
+      _isFirstLoading = !keepData;
+      _isLoading = keepData;
+      if (!keepData) {
+        _data = null;
+      }
       _error = null;
       _page = 1;
     });
     firstLoad();
   }
 
+  Completer<void>? _refreshCompleter;
+
+  /// Reloads the first page while keeping the current content on screen.
   Future<void> refresh() {
+    final indicator = _refreshIndicatorKey.currentState;
+    if (!_refreshFromIndicator &&
+        indicator != null &&
+        _data != null &&
+        _error == null) {
+      // Let the indicator drive the reload so the user sees progress; paging
+      // state is already cleared, so hold off loading more until it starts.
+      _isLoading = true;
+      return indicator.show();
+    }
+    _refreshFromIndicator = false;
+    _refreshCompleter?.complete();
     final completer = Completer<void>();
     _refreshCompleter = completer;
-    reset();
+    _keepDataOnReset = true;
+    try {
+      reset();
+    } finally {
+      _keepDataOnReset = false;
+    }
     return completer.future;
   }
 
   Widget withRefresh(Widget child) {
     return buildRefreshWrapper(
-      onRefresh: refresh,
-      child: child,
+      key: _refreshIndicatorKey,
+      onRefresh: () {
+        _refreshFromIndicator = true;
+        return refresh();
+      },
+      child: KeyedSubtree(
+        key: ValueKey(_generation),
+        child: child,
+      ),
     );
   }
 
   void firstLoad() {
+    final generation = _generation;
     loadData(_page).then((value) {
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       if(value.success) {
         _page++;
         setState(() {
           _isFirstLoading = false;
+          _isLoading = false;
           _data = value.data;
         });
       } else {
         setState(() {
           _isFirstLoading = false;
+          _isLoading = false;
+          _data = null;
           _error = value.errorMessage!;
         });
       }
@@ -217,8 +274,15 @@ abstract class MultiPageLoadingState<T extends StatefulWidget, S extends Object>
 
   @override
   void initState() {
-    firstLoad();
     super.initState();
+    firstLoad();
+  }
+
+  @override
+  void dispose() {
+    _refreshCompleter?.complete();
+    _refreshCompleter = null;
+    super.dispose();
   }
 
   Widget buildLoading(BuildContext context) {
@@ -238,7 +302,7 @@ abstract class MultiPageLoadingState<T extends StatefulWidget, S extends Object>
             onPressed: () {
               reset();
             },
-            child: const Text("Retry"),
+            child: Text("Retry".tl),
           )
         ],
       ),

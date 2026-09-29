@@ -7,6 +7,7 @@ import 'package:photo_view/photo_view_gallery.dart';
 import 'package:pixes/components/animated_image.dart';
 import 'package:pixes/components/grid.dart';
 import 'package:pixes/components/md.dart';
+import 'package:pixes/components/lazy_indexed_stack.dart';
 import 'package:pixes/components/title_bar.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/network/download.dart';
@@ -35,10 +36,23 @@ class _DownloadedPageState extends State<DownloadedPage> {
         List.generate(illusts.length, (index) => FlyoutController());
   }
 
+  bool visible = true;
+
   @override
   void initState() {
     loadData();
     super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Kept alive while hidden; pick up downloads finished meanwhile.
+    final visible = PageVisibility.of(context);
+    if (visible && !this.visible) {
+      loadData();
+    }
+    this.visible = visible;
   }
 
   @override

@@ -1,6 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart' hide TitleBar;
 import 'package:pixes/appdata.dart';
 import 'package:pixes/components/grid.dart';
+import 'package:pixes/components/lazy_indexed_stack.dart';
 import 'package:pixes/components/loading.dart';
 import 'package:pixes/components/novel.dart';
 import 'package:pixes/components/segmented_button.dart';
@@ -16,17 +17,17 @@ class NovelBookmarksPage extends StatefulWidget {
   State<NovelBookmarksPage> createState() => _NovelBookmarksPageState();
 }
 
-class _NovelBookmarksPageState
-    extends MultiPageLoadingState<NovelBookmarksPage, Novel> {
+class _NovelBookmarksPageState extends State<NovelBookmarksPage> {
   bool public = true;
+  final pageKeys = <bool, GlobalKey<_OneNovelBookmarksPageState>>{};
 
   @override
-  Widget? buildFrame(BuildContext context, Widget child) {
+  Widget build(BuildContext context) {
     return Column(
       children: [
         TitleBar(
           title: "Bookmarks".tl,
-          onRefresh: refresh,
+          onRefresh: () => pageKeys[public]?.currentState?.refresh(),
           action: SegmentedButton(
             options: [
               SegmentedButtonOption("public", "Public".tl),
@@ -35,40 +36,52 @@ class _NovelBookmarksPageState
             onPressed: (key) {
               var newPublic = key == "public";
               if (newPublic != public) {
-                public = newPublic;
-                nextUrl = null;
-                reset();
+                setState(() {
+                  public = newPublic;
+                });
               }
             },
             value: public ? "public" : "private",
           ),
         ),
         Expanded(
-          child: child,
+          child: LazyIndexedStack<bool>(
+            current: public,
+            builder: (context, public) => _OneNovelBookmarksPage(
+              public,
+              key: pageKeys.putIfAbsent(public, GlobalKey.new),
+            ),
+          ),
         )
       ],
     );
   }
+}
+
+class _OneNovelBookmarksPage extends StatefulWidget {
+  const _OneNovelBookmarksPage(this.public, {super.key});
+
+  final bool public;
 
   @override
+  State<_OneNovelBookmarksPage> createState() => _OneNovelBookmarksPageState();
+}
+
+class _OneNovelBookmarksPageState
+    extends MultiPageLoadingState<_OneNovelBookmarksPage, Novel> {
+  @override
   Widget buildContent(BuildContext context, List<Novel> data) {
-    return Column(
-      children: [
-        Expanded(
-          child: withRefresh(GridViewWithFixedItemHeight(
-            itemCount: data.length,
-            itemHeight: 164,
-            minCrossAxisExtent: 400,
-            builder: (context, index) {
-              if (index == data.length - 1) {
-                nextPage();
-              }
-              return NovelWidget(data[index]);
-            },
-          ).paddingHorizontal(8)),
-        )
-      ],
-    );
+    return withRefresh(GridViewWithFixedItemHeight(
+      itemCount: data.length,
+      itemHeight: 164,
+      minCrossAxisExtent: 400,
+      builder: (context, index) {
+        if (index == data.length - 1) {
+          nextPage();
+        }
+        return NovelWidget(data[index]);
+      },
+    ).paddingHorizontal(8));
   }
 
   String? nextUrl;
@@ -83,9 +96,12 @@ class _NovelBookmarksPageState
   Future<Res<List<Novel>>> loadData(int page) async {
     if (nextUrl == "end") return Res.error("No more data");
     var res = nextUrl == null
-        ? await Network().getBookmarkedNovels(appdata.account!.user.id, public)
+        ? await Network()
+            .getBookmarkedNovels(appdata.account!.user.id, widget.public)
         : await Network().getNovelsWithNextUrl(nextUrl!);
-    nextUrl = res.subData ?? "end";
+    if (!res.error) {
+      nextUrl = res.subData ?? "end";
+    }
     return res;
   }
 }

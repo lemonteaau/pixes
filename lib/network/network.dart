@@ -486,9 +486,11 @@ class Network {
     }
   }
 
+  static const mangaRecommendationUrl =
+      "/v1/manga/recommended?filter=for_android&include_ranking_illusts=true&include_privacy_policy=true";
+
   Future<Res<List<Illust>>> getRecommendedMangas() async {
-    var res = await apiGet(
-        "/v1/manga/recommended?filter=for_android&include_ranking_illusts=true&include_privacy_policy=true");
+    var res = await apiGet(mangaRecommendationUrl);
     if (res.success) {
       return Res(
           (res.data["illusts"] as List).map((e) => Illust.fromJson(e)).toList(),

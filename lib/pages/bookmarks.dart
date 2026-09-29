@@ -9,6 +9,7 @@ import 'package:pixes/pages/illust_page.dart';
 import 'package:pixes/utils/translation.dart';
 
 import '../components/illust_widget.dart';
+import '../components/lazy_indexed_stack.dart';
 import '../components/loading.dart';
 
 class BookMarkedArtworkPage extends StatefulWidget {
@@ -20,7 +21,7 @@ class BookMarkedArtworkPage extends StatefulWidget {
 
 class _BookMarkedArtworkPageState extends State<BookMarkedArtworkPage> {
   String restrict = "public";
-  final pageKey = GlobalKey<_OneBookmarkedPageState>();
+  final pageKeys = <String, GlobalKey<_OneBookmarkedPageState>>{};
 
   @override
   Widget build(BuildContext context) {
@@ -28,9 +29,12 @@ class _BookMarkedArtworkPageState extends State<BookMarkedArtworkPage> {
       children: [
         buildTab(),
         Expanded(
-          child: _OneBookmarkedPage(
-            restrict,
-            key: pageKey,
+          child: LazyIndexedStack<String>(
+            current: restrict,
+            builder: (context, restrict) => _OneBookmarkedPage(
+              restrict,
+              key: pageKeys.putIfAbsent(restrict, GlobalKey.new),
+            ),
           ),
         )
       ],
@@ -40,7 +44,7 @@ class _BookMarkedArtworkPageState extends State<BookMarkedArtworkPage> {
   Widget buildTab() {
     return TitleBar(
       title: "Bookmarks".tl,
-      onRefresh: () => pageKey.currentState?.refresh(),
+      onRefresh: () => pageKeys[restrict]?.currentState?.refresh(),
       action: Row(
         children: [
           BatchDownloadButton(
@@ -79,15 +83,6 @@ class _OneBookmarkedPage extends StatefulWidget {
 
 class _OneBookmarkedPageState
     extends MultiPageLoadingState<_OneBookmarkedPage, Illust> {
-  @override
-  void didUpdateWidget(covariant _OneBookmarkedPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.restrict != widget.restrict) {
-      nextUrl = null;
-      reset();
-    }
-  }
-
   @override
   Future<void> refresh() {
     nextUrl = null;
