@@ -3,6 +3,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/utils/block.dart';
 import 'package:pixes/utils/translation.dart';
+import 'package:pixes/pages/illust_viewer.dart';
 
 import '../components/batch_download.dart';
 import '../components/illust_widget.dart';
@@ -10,7 +11,6 @@ import '../components/lazy_indexed_stack.dart';
 import '../components/loading.dart';
 import '../components/title_bar.dart';
 import '../network/network.dart';
-import 'illust_page.dart';
 
 class RankingPage extends StatefulWidget {
   const RankingPage({super.key});
@@ -121,8 +121,11 @@ class _OneRankingPageState
             nextPage();
           }
           return IllustWidget(data[index], onTap: () {
-            context.to(() => IllustGalleryPage(
-                illusts: data, initialPage: index, nextUrl: nextUrl));
+            openIllustFeed(context,
+                illusts: data,
+                index: index,
+                nextUrl: nextUrl,
+                source: 'Ranking'.tl);
           });
         },
       ));

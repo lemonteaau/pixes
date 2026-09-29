@@ -27,8 +27,11 @@ class HistoryManager {
 
   late Database _db;
 
+  bool _initialized = false;
+
   init() {
     _db = sqlite3.open("${App.dataPath}/history.db");
+    _initialized = true;
     _db.execute('''
       create table if not exists history (
         id integer primary key not null,
@@ -46,6 +49,7 @@ class HistoryManager {
   }
 
   void addHistory(Illust illust) {
+    if (!_initialized) return;
     var time = DateTime.now();
     _db.execute('''
       insert or replace into history (id, imgPath, time, imageCount, isR18, isR18g, isAi, isGif, width, height)

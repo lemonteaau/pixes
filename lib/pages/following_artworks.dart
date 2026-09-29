@@ -4,6 +4,7 @@ import 'package:pixes/components/title_bar.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/utils/block.dart';
 import 'package:pixes/utils/translation.dart';
+import 'package:pixes/pages/illust_viewer.dart';
 
 import '../components/batch_download.dart';
 import '../components/slideshow_button.dart';
@@ -12,7 +13,6 @@ import '../components/lazy_indexed_stack.dart';
 import '../components/loading.dart';
 import '../components/segmented_button.dart';
 import '../network/network.dart';
-import 'illust_page.dart';
 
 class FollowingArtworksPage extends StatefulWidget {
   const FollowingArtworksPage({super.key});
@@ -120,8 +120,11 @@ class _OneFollowingPageState
           nextPage();
         }
         return IllustWidget(data[index], onTap: () {
-          context.to(() => IllustGalleryPage(
-              illusts: data, initialPage: index, nextUrl: nextUrl));
+          openIllustFeed(context,
+                illusts: data,
+                index: index,
+                nextUrl: nextUrl,
+                source: 'Following'.tl);
         });
       },
     ));

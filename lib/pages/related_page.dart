@@ -6,6 +6,7 @@ import 'package:pixes/components/title_bar.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/network/network.dart';
 import 'package:pixes/utils/translation.dart';
+import 'package:pixes/pages/illust_viewer.dart';
 
 class RelatedIllustsPage extends StatefulWidget {
   const RelatedIllustsPage(this.id, {super.key});
@@ -53,7 +54,17 @@ class _RelatedIllustsPageState
           if (index == data.length - 1) {
             nextPage();
           }
-          return IllustWidget(data[index]);
+          return IllustWidget(
+            data[index],
+            // The classic viewer opens related works one at a time.
+            onTap: useLegacyIllustViewer
+                ? null
+                : () => openIllustFeed(context,
+                    illusts: data,
+                    index: index,
+                    nextUrl: nextUrl,
+                    source: "Related artworks".tl),
+          );
         },
       ));
   }

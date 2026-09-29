@@ -17,6 +17,7 @@ import 'package:pixes/utils/update.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import 'logs.dart';
+import 'package:pixes/pages/illust_viewer.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -288,6 +289,20 @@ class _SettingsPageState extends State<SettingsPage> {
                   context.to(() => const ShortcutsSettings());
                 },
               )),
+          buildItem(
+              title: "Classic artwork viewer".tl,
+              subtitle:
+                  "Open artworks in detail pages instead of the full-screen player"
+                      .tl,
+              action: ToggleSwitch(
+                  key: const ValueKey("legacy-illust-viewer"),
+                  checked: useLegacyIllustViewer,
+                  onChanged: (value) {
+                    setState(() {
+                      appdata.settings['useLegacyIllustViewer'] = value;
+                    });
+                    appdata.writeSettings();
+                  })),
           buildItem(
               title: "Display the original image on the details page".tl,
               action: ToggleSwitch(

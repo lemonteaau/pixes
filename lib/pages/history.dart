@@ -9,9 +9,9 @@ import 'package:pixes/foundation/app.dart';
 import 'package:pixes/foundation/history.dart';
 import 'package:pixes/network/network.dart';
 import 'package:pixes/utils/translation.dart';
+import 'package:pixes/pages/illust_viewer.dart';
 
 import '../components/illust_widget.dart';
-import 'illust_page.dart';
 
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
@@ -162,10 +162,10 @@ class _NetworkHistoryPageState
             nextPage();
           }
           return IllustWidget(data[index], onTap: () {
-            context.to(() => IllustGalleryPage(
-                  illusts: data,
-                  initialPage: index,
-            ));
+            openIllustFeed(context,
+                illusts: data,
+                index: index,
+                source: 'History'.tl);
           });
         },
       ));

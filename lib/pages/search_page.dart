@@ -8,7 +8,6 @@ import 'package:pixes/components/search_field.dart';
 import 'package:pixes/components/user_preview.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/network/network.dart';
-import 'package:pixes/pages/illust_page.dart';
 import 'package:pixes/pages/novel_page.dart';
 import 'package:pixes/pages/user_info_page.dart';
 import 'package:pixes/utils/app_links.dart';
@@ -16,6 +15,7 @@ import 'package:pixes/utils/block.dart';
 import 'package:pixes/utils/debounce.dart';
 import 'package:pixes/utils/ext.dart';
 import 'package:pixes/utils/translation.dart';
+import 'package:pixes/pages/illust_viewer.dart';
 
 import '../components/animated_image.dart';
 import '../components/grid.dart';
@@ -57,7 +57,7 @@ class _SearchPageState extends State<SearchPage> {
       case 2:
         context.to(() => SearchUserResultPage(text));
       case 3:
-        context.to(() => IllustPageWithId(text));
+        openIllustById(context, text);
       case 4:
         context.to(() => UserInfoPage(text));
       case 5:
@@ -430,8 +430,11 @@ class _SearchResultPageState
               return IllustWidget(
                 data[index],
                 onTap: () {
-                  context.to(() => IllustGalleryPage(
-                      illusts: data, initialPage: index, nextUrl: nextUrl));
+                  openIllustFeed(context,
+                illusts: data,
+                index: index,
+                nextUrl: nextUrl,
+                source: keyword);
                 },
               );
             },

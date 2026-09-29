@@ -7,8 +7,8 @@ import 'package:pixes/components/title_bar.dart';
 import 'package:pixes/appdata.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/network/network.dart';
-import 'package:pixes/pages/illust_page.dart';
 import 'package:pixes/utils/translation.dart';
+import 'package:pixes/pages/illust_viewer.dart';
 
 import '../components/illust_widget.dart';
 import '../components/lazy_indexed_stack.dart';
@@ -120,8 +120,11 @@ class _OneBookmarkedPageState
         return IllustWidget(
           data[index],
           onTap: () {
-            context.to(() => IllustGalleryPage(
-                illusts: data, initialPage: index, nextUrl: nextUrl));
+            openIllustFeed(context,
+                illusts: data,
+                index: index,
+                nextUrl: nextUrl,
+                source: 'Bookmarks'.tl);
           },
         );
       },

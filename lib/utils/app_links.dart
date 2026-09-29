@@ -4,13 +4,13 @@ import 'package:app_links/app_links.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/foundation/log.dart';
-import 'package:pixes/pages/illust_page.dart';
 import 'package:pixes/pages/novel_page.dart';
 import 'package:pixes/pages/search_page.dart';
 import 'package:pixes/pages/user_info_page.dart';
 import 'package:pixes/utils/ext.dart';
 import 'package:pixes/utils/translation.dart';
 import 'package:win32_registry/win32_registry.dart';
+import 'package:pixes/pages/illust_viewer.dart';
 
 Future<void> _register(String scheme) async {
   String appPath = Platform.resolvedExecutable;
@@ -99,8 +99,8 @@ bool handleLink(Uri uri) {
         }
       case "illusts":
         if (path.length == 2) {
-          App.mainNavigatorKey?.currentContext
-              ?.to(() => IllustPageWithId(path[1]));
+          final context = App.mainNavigatorKey?.currentContext;
+          if (context != null) openIllustById(context, path[1]);
           return true;
         }
     }
@@ -121,8 +121,8 @@ bool handleLink(Uri uri) {
         }
       case "artworks":
         if (path.length == 2) {
-          App.mainNavigatorKey?.currentContext
-              ?.to(() => IllustPageWithId(path[1]));
+          final context = App.mainNavigatorKey?.currentContext;
+          if (context != null) openIllustById(context, path[1]);
           return true;
         }
       case "tags":

@@ -15,6 +15,7 @@ import 'package:pixes/network/network.dart';
 import 'package:pixes/pages/following_users_page.dart';
 import 'package:pixes/utils/block.dart';
 import 'package:pixes/utils/translation.dart';
+import 'package:pixes/pages/illust_viewer.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import '../components/illust_widget.dart';
@@ -69,6 +70,7 @@ class _UserInfoPageState extends LoadingState<UserInfoPage, UserDetails> {
             _UserArtworks(
               data.id.toString(),
               page,
+              userName: data.name,
               key: ValueKey(data.id + page),
             ),
           SliverPadding(
@@ -349,11 +351,15 @@ class _UserInfoPageState extends LoadingState<UserInfoPage, UserDetails> {
 }
 
 class _UserArtworks extends StatefulWidget {
-  const _UserArtworks(this.uid, this.type, {super.key});
+  const _UserArtworks(this.uid, this.type,
+      {required this.userName, super.key});
 
   final String uid;
 
   final int type;
+
+  /// Shown as the title of the artwork viewer.
+  final String userName;
 
   @override
   State<_UserArtworks> createState() => _UserArtworksState();
@@ -403,8 +409,11 @@ class _UserArtworksState extends MultiPageLoadingState<_UserArtworks, Illust> {
             nextPage();
           }
           return IllustWidget(data[index], onTap: () {
-            context.to(() => IllustGalleryPage(
-                illusts: data, initialPage: index, nextUrl: nextUrl));
+            openIllustFeed(context,
+                illusts: data,
+                index: index,
+                nextUrl: nextUrl,
+                source: widget.userName);
           });
         },
         childCount: data.length,

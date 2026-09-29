@@ -14,6 +14,7 @@ import 'package:pixes/utils/translation.dart';
 import '../network/network.dart';
 import '../pages/illust_page.dart';
 import 'md.dart';
+import '../pages/illust_viewer.dart';
 
 typedef UpdateFavoriteFunc = void Function(bool v);
 
@@ -100,9 +101,7 @@ class _IllustWidgetState extends State<IllustWidget> {
                     margin: EdgeInsets.zero,
                     child: GestureDetector(
                       onTap: widget.onTap ??
-                          () {
-                            context.to(() => IllustPage(widget.illust));
-                          },
+                          () => openIllust(context, widget.illust),
                       onSecondaryTapUp: showMenu,
                       onLongPress: showMenu,
                       child: ClipRRect(
@@ -261,7 +260,13 @@ class _IllustWidgetState extends State<IllustWidget> {
             MenuFlyoutItem(
                 text: Text("View".tl),
                 onPressed: () {
-                  context.to(() => IllustPage(widget.illust));
+                  if (useLegacyIllustViewer) {
+                    context.to(() => IllustPage(widget.illust));
+                  } else if (widget.onTap != null) {
+                    widget.onTap!();
+                  } else {
+                    openIllust(this.context, widget.illust);
+                  }
                 }),
             MenuFlyoutItem(
                 text: Text("Private Favorite".tl),
@@ -348,9 +353,7 @@ class IllustHistoryWidget extends StatelessWidget {
                 padding: EdgeInsets.zero,
                 margin: EdgeInsets.zero,
                 child: GestureDetector(
-                  onTap: () {
-                    context.to(() => IllustPageWithId(illust.id.toString()));
-                  },
+                  onTap: () => openIllustById(context, illust.id.toString()),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(4.0),
                     child: AnimatedImage(

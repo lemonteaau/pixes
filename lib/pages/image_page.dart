@@ -24,7 +24,8 @@ class ImagePage extends StatefulWidget {
 
   final int initialPage;
 
-  static show(List<String> urls, {int initialPage = 0}) {
+  /// Completes when the viewer is closed.
+  static Future<void> show(List<String> urls, {int initialPage = 0}) async {
     // Temporary solution for issue: https://github.com/flutter/flutter/issues/152323
     // Patch 1 begin
     if (App.isAndroid) {
@@ -33,7 +34,7 @@ class ImagePage extends StatefulWidget {
       ));
     }
     // Patch 1 End
-    App.rootNavigatorKey.currentState?.push(AppPageRoute(
+    await App.rootNavigatorKey.currentState?.push(AppPageRoute(
       builder: (context) => ImagePage(urls, initialPage: initialPage),
     ));
   }

@@ -11,6 +11,7 @@ import 'package:pixes/components/md.dart';
 import 'package:pixes/components/page_route.dart';
 import 'package:pixes/components/ugoira.dart';
 import 'package:pixes/foundation/app.dart';
+import 'package:pixes/foundation/history.dart';
 import 'package:pixes/foundation/image_provider.dart';
 import 'package:pixes/foundation/optimistic_toggle.dart';
 import 'package:pixes/foundation/slideshow/original_image_load.dart';
@@ -19,6 +20,8 @@ import 'package:pixes/network/download.dart';
 import 'package:pixes/network/network.dart';
 import 'package:pixes/pages/comments_page.dart';
 import 'package:pixes/pages/illust_page.dart';
+import 'package:pixes/pages/illust_viewer.dart';
+import 'package:pixes/pages/image_page.dart';
 import 'package:pixes/pages/user_info_page.dart';
 import 'package:pixes/utils/screen_awake.dart';
 import 'package:pixes/utils/translation.dart';
@@ -38,11 +41,21 @@ class SlideshowPage extends StatefulWidget {
     this.controller,
     this.setBookmark,
     this.resumeKey,
+    this.initialIllustId,
+    this.autoPlay = true,
   });
 
   final List<Illust> illusts;
   final String? nextUrl;
   final String source;
+
+  /// The work to start at, when the feed isn't played from the top, such as
+  /// when an artwork was tapped in a list.
+  final int? initialIllustId;
+
+  /// Whether to start playing straight away, as a slideshow does. Opening an
+  /// artwork to look at it starts paused.
+  final bool autoPlay;
 
   /// Optional dependencies for exercising the complete viewer without network.
   /// The page owns and disposes its playback controller.
@@ -85,6 +98,15 @@ class _SlideshowPageState extends State<SlideshowPage>
   bool _controlsVisible = true;
   bool _wasPlaying = true;
   bool _sheetOpen = false;
+  int? _recordedId;
+
+  /// Where each finger is, to notice a pinch.
+  final _pointers = <int, Offset>{};
+  double? _pinchStart;
+  bool _pinchHandled = false;
+
+  DateTime _lastWheel = DateTime(0);
+  DateTime _lastWheelPage = DateTime(0);
 
   static const _overlayFadeDuration = Duration(milliseconds: 250);
   static const _controlsIdleDuration = Duration(seconds: 3);
@@ -108,6 +130,7 @@ class _SlideshowPageState extends State<SlideshowPage>
           waitForImageLoad:
               appdata.settings['slideshowWaitForImageLoad'] != false,
         );
+    if (widget.controller == null) _controller.playing = widget.autoPlay;
     _controller.addListener(_update);
     _bookmarkChanges = illustBookmarks.changes.listen((change) {
       for (final illust in _illusts()) {
@@ -121,14 +144,14 @@ class _SlideshowPageState extends State<SlideshowPage>
       }
       if (mounted) setState(() {});
     });
-    final resumeAt = session != null && session.index < _controller.slideCount
+    final startAt = session != null && session.index < _controller.slideCount
         ? session.index
-        : null;
+        : _firstSlideOf(widget.initialIllustId);
     _vertical = PageController(
-        initialPage: resumeAt == null ? 0 : _controller.workOf(resumeAt));
+        initialPage: startAt == null ? 0 : _controller.workOf(startAt));
     if (_controller.current == null) {
       unawaited(
-          resumeAt == null ? _controller.next() : _controller.goTo(resumeAt));
+          startAt == null ? _controller.next() : _controller.goTo(startAt));
     }
     _setImmersive(true);
     // Paused or not, the screen stays on while the slideshow is open.
@@ -158,6 +181,28 @@ class _SlideshowPageState extends State<SlideshowPage>
     }
   }
 
+  /// The first slide of the work with [id], if it's in the feed.
+  int? _firstSlideOf(int? id) {
+    if (id == null) return null;
+    for (var work = 0; work < _controller.workCount; work++) {
+      final first = _controller.pagesOf(work).first;
+      if (_controller.slideAt(first).illust.id == id) return first;
+    }
+    return null;
+  }
+
+  /// Adds the work on screen to the browsing history, as its detail page
+  /// does.
+  void _recordHistory() {
+    final illust = _controller.current?.illust;
+    if (illust == null || illust.id == _recordedId) return;
+    _recordedId = illust.id;
+    HistoryManager().addHistory(illust);
+    if (appdata.account?.user.isPremium == true) {
+      IllustGalleryPage.cachedHistoryIds.add(illust.id);
+    }
+  }
+
   void _updateCountdown() {
     if (_countdownRevision == _controller.countdownRevision) return;
     _countdownRevision = _controller.countdownRevision;
@@ -172,6 +217,7 @@ class _SlideshowPageState extends State<SlideshowPage>
   void _update() {
     if (!mounted) return;
     _updateCountdown();
+    _recordHistory();
     if (_controller.playing != _wasPlaying) {
       _wasPlaying = _controller.playing;
       // Pausing or resuming shows the controls, then leaves just the artwork.
@@ -238,14 +284,67 @@ class _SlideshowPageState extends State<SlideshowPage>
     }
   }
 
-  void _pointerDown(PointerDownEvent _) {
+  void _pointerDown(PointerDownEvent event) {
+    _pointers[event.pointer] = event.position;
+    if (_pointers.length == 2) {
+      _pinchStart = _pointerSpan();
+      _pinchHandled = false;
+    }
     _tapTimer?.cancel();
     _touching = true;
     _didScroll = false;
     _controller.setInteracting(true);
   }
 
-  void _pointerUp(PointerEvent _) {
+  double _pointerSpan() {
+    final positions = _pointers.values.toList();
+    return (positions[0] - positions[1]).distance;
+  }
+
+  /// Spreading two fingers opens the image in the zoomable viewer.
+  void _pointerMove(PointerMoveEvent event) {
+    if (!_pointers.containsKey(event.pointer)) return;
+    _pointers[event.pointer] = event.position;
+    final start = _pinchStart;
+    if (start == null || start <= 0 || _pinchHandled || _pointers.length != 2) {
+      return;
+    }
+    if (_pointerSpan() / start > 1.3) {
+      _pinchHandled = true;
+      unawaited(_openZoom());
+    }
+  }
+
+  /// A mouse wheel moves one work per burst of scrolling; left to itself the
+  /// pager would scroll a few pixels and snap back.
+  void _pointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+    GestureBinding.instance.pointerSignalResolver.register(event, (event) {
+      final delta = (event as PointerScrollEvent).scrollDelta;
+      final now = DateTime.now();
+      final newBurst =
+          now.difference(_lastWheel) > const Duration(milliseconds: 250);
+      _lastWheel = now;
+      if (!newBurst &&
+          now.difference(_lastWheelPage) < const Duration(milliseconds: 800)) {
+        return;
+      }
+      if (delta.dy.abs() >= delta.dx.abs()) {
+        if (delta.dy == 0) return;
+        _lastWheelPage = now;
+        unawaited(delta.dy > 0
+            ? _controller.nextWork()
+            : _controller.previousWork());
+      } else {
+        _lastWheelPage = now;
+        _horizontal(delta.dx > 0 ? 1 : -1);
+      }
+    });
+  }
+
+  void _pointerUp(PointerEvent event) {
+    _pointers.remove(event.pointer);
+    if (_pointers.length < 2) _pinchStart = null;
     _touching = false;
     // Keep the timer frozen while Flutter distinguishes a tap from a double tap.
     _tapTimer?.cancel();
@@ -361,25 +460,120 @@ class _SlideshowPageState extends State<SlideshowPage>
   }
 
   /// Opens another page on top, pausing playback until it is closed.
-  Future<void> _open(Route<void> route) async {
+  Future<void> _open(Route<void> route) =>
+      _whileAway(() => Navigator.of(context).push(route));
+
+  Future<void> _whileAway(Future<void> Function() show) async {
     _controller.setActive(false);
     _setImmersive(false);
     unawaited(ScreenAwake.setEnabled(false));
-    await Navigator.of(context).push(route);
+    await show();
     if (!mounted) return;
     _setImmersive(true);
     unawaited(ScreenAwake.setEnabled(true));
     _controller.setActive(true);
   }
 
-  void _openDetails(Illust illust) =>
-      _open(AppPageRoute(builder: (_) => IllustPage(illust)));
+  /// Pages opened from here sit above the app's title bar, so they get a
+  /// frame with a back button.
+  void _openPage(Widget page) => _open(
+      AppPageRoute(builder: (_) => ViewerSubpageFrame(child: page)));
+
+  void _openDetails(Illust illust) => _openPage(IllustPage(illust));
 
   void _openAuthor(Author author) =>
-      _open(AppPageRoute(builder: (_) => UserInfoPage(author.id.toString())));
+      _openPage(UserInfoPage(author.id.toString()));
 
   void _openComments(Illust illust) =>
       _open(SideBarRoute(CommentsPage(illust.id.toString())));
+
+  /// Shows the current image in the zoomable viewer, from the downloaded
+  /// file when there is one.
+  Future<void> _openZoom() async {
+    final slide = _controller.current;
+    if (slide == null) return;
+    final illust = slide.illust;
+    final urls = [
+      for (var i = 0; i < illust.images.length; i++)
+        switch (DownloadManager().getImage(illust.id, i)) {
+          final file? => "file://${file.path}",
+          null => illust.images[i].original,
+        },
+    ];
+    await _whileAway(() => ImagePage.show(urls, initialPage: slide.page));
+  }
+
+  void _toggleFollow(Author author) {
+    setAuthorFollowed(author, !author.isFollowed, onFailure: _showMessage);
+    setState(() {});
+  }
+
+  /// Moves [offset] images through the feed: through the pages of the
+  /// current work first, then on to the next or previous work.
+  void _step(int offset) {
+    final index = _controller.currentIndex;
+    if (index < 0) return;
+    final pages = _controller.pagesOf(_controller.workOf(index));
+    final target = pages.indexOf(index) + offset;
+    if (target >= 0 && target < pages.length) {
+      unawaited(_controller.goTo(pages[target]));
+    } else {
+      unawaited(offset > 0
+          ? _controller.nextWork()
+          : _controller.previousWork());
+    }
+  }
+
+  /// Keyboard shortcuts, including the ones set for artworks in the
+  /// settings.
+  Map<ShortcutActivator, VoidCallback> _shortcuts() {
+    void withIllust(void Function(Illust illust) action) {
+      final illust = _controller.current?.illust;
+      if (illust != null) action(illust);
+    }
+
+    void like() =>
+        withIllust((illust) => _setBookmarked(illust, !illust.isBookmarked));
+    void nextWork() => unawaited(_controller.nextWork());
+    void previousWork() => unawaited(_controller.previousWork());
+
+    final keys = <LogicalKeyboardKey, VoidCallback>{
+      LogicalKeyboardKey.arrowDown: nextWork,
+      LogicalKeyboardKey.arrowUp: previousWork,
+      LogicalKeyboardKey.arrowRight: () => _step(1),
+      LogicalKeyboardKey.arrowLeft: () => _step(-1),
+      LogicalKeyboardKey.keyL: like,
+    };
+    // In the order of the shortcut settings.
+    final configurable = <VoidCallback>[
+      nextWork,
+      previousWork,
+      () => _step(1),
+      () => _step(-1),
+      like,
+      () => withIllust(_download),
+      () => withIllust((illust) => _toggleFollow(illust.author)),
+      () => withIllust(_openComments),
+      () => unawaited(_openZoom()),
+    ];
+    final configured = appdata.settings['shortcuts'];
+    if (configured is List) {
+      for (var i = 0;
+          i < configured.length && i < configurable.length;
+          i++) {
+        final id = configured[i];
+        if (id is! int) continue;
+        keys[LogicalKeyboardKey.findKeyByKeyId(id) ?? LogicalKeyboardKey(id)] =
+            configurable[i];
+      }
+    }
+    keys[LogicalKeyboardKey.space] = _controller.togglePlaying;
+    keys.remove(LogicalKeyboardKey.escape);
+    return {
+      for (final entry in keys.entries)
+        SingleActivator(entry.key): entry.value,
+    };
+  }
 
   void _download(Illust illust) {
     DownloadManager().addDownloadingTask(illust);
@@ -410,6 +604,7 @@ class _SlideshowPageState extends State<SlideshowPage>
             _setBookmarked(illust, true, restrict: 'private'),
         onDownload: _download,
         onDetails: _openDetails,
+        onZoom: () => unawaited(_openZoom()),
         onInterval: _setInterval,
         onChanged: () {
           if (mounted) setState(() {});
@@ -445,6 +640,12 @@ class _SlideshowPageState extends State<SlideshowPage>
   @override
   void dispose() {
     _saveSession();
+    // Sends the batch of works viewed, as the classic viewer does.
+    if (IllustGalleryPage.cachedHistoryIds.length > 5) {
+      unawaited(Network().sendHistory(
+          IllustGalleryPage.cachedHistoryIds.toList().reversed.toList()));
+      IllustGalleryPage.cachedHistoryIds.clear();
+    }
     _setImmersive(false);
     unawaited(ScreenAwake.setEnabled(false));
     WidgetsBinding.instance.removeObserver(this);
@@ -473,6 +674,7 @@ class _SlideshowPageState extends State<SlideshowPage>
   Widget _images() {
     return Listener(
       onPointerDown: _pointerDown,
+      onPointerMove: _pointerMove,
       onPointerUp: _pointerUp,
       onPointerCancel: _pointerUp,
       child: GestureDetector(
@@ -503,6 +705,7 @@ class _SlideshowPageState extends State<SlideshowPage>
                     work, () => GlobalKey<_ArtworkPagerState>()),
                 pages: pages,
                 controller: _controller,
+                onPointerSignal: _pointerSignal,
                 onChanged: (index) {
                   if ((!_syncing || _touching || _scrolling) &&
                       _vertical.hasClients &&
@@ -559,7 +762,9 @@ class _SlideshowPageState extends State<SlideshowPage>
               Expanded(
                 child: _draggable(Center(
                   child: Text(
-                    '${widget.source} · ${'Slideshow'.tl}',
+                    widget.autoPlay
+                        ? '${widget.source} · ${'Slideshow'.tl}'
+                        : widget.source,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -779,28 +984,18 @@ class _SlideshowPageState extends State<SlideshowPage>
         child: IconTheme(
           data: const IconThemeData(color: Colors.white),
           child: CallbackShortcuts(
-            bindings: {
-              const SingleActivator(LogicalKeyboardKey.space):
-                  _controller.togglePlaying,
-              const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
-                  unawaited(_controller.nextWork()),
-              const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
-                  unawaited(_controller.previousWork()),
-              const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
-                  _horizontal(1),
-              const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
-                  _horizontal(-1),
-              const SingleActivator(LogicalKeyboardKey.keyL): () {
-                final illust = _controller.current?.illust;
-                if (illust != null) {
-                  _setBookmarked(illust, !illust.isBookmarked);
-                }
-              },
-              const SingleActivator(LogicalKeyboardKey.escape): () =>
-                  Navigator.of(context).pop(),
-            },
+            bindings: _shortcuts(),
             child: Focus(
               autofocus: true,
+              // Closes on key up and keeps both halves of the key press, so
+              // the app's own Escape handling doesn't close what's below too.
+              onKeyEvent: (node, event) {
+                if (event.logicalKey != LogicalKeyboardKey.escape) {
+                  return KeyEventResult.ignored;
+                }
+                if (event is KeyUpEvent) Navigator.of(context).maybePop();
+                return KeyEventResult.handled;
+              },
               child: MouseRegion(
                 onHover: (_) => _showControls(),
                 child: ColoredBox(
@@ -1232,6 +1427,7 @@ class _MoreSheet extends StatefulWidget {
     required this.onPrivateBookmark,
     required this.onDownload,
     required this.onDetails,
+    required this.onZoom,
     required this.onInterval,
     required this.onChanged,
   });
@@ -1241,6 +1437,7 @@ class _MoreSheet extends StatefulWidget {
   final ValueChanged<Illust> onPrivateBookmark;
   final ValueChanged<Illust> onDownload;
   final ValueChanged<Illust> onDetails;
+  final VoidCallback onZoom;
   final ValueChanged<int> onInterval;
   final VoidCallback onChanged;
 
@@ -1317,6 +1514,12 @@ class _MoreSheetState extends State<_MoreSheet> {
                             label: 'Share'.tl,
                             onTap: () => _close(() => Share.share(
                                 "${illust.title}\nhttps://pixiv.net/artworks/${illust.id}")),
+                          ),
+                        if (illust != null)
+                          _SheetAction(
+                            icon: MdIcons.zoom_in_rounded,
+                            label: 'View original'.tl,
+                            onTap: () => _close(widget.onZoom),
                           ),
                         if (illust != null)
                           _SheetAction(
@@ -1500,10 +1703,15 @@ class _ArtworkPager extends StatefulWidget {
       {super.key,
       required this.pages,
       required this.controller,
-      required this.onChanged});
+      required this.onChanged,
+      required this.onPointerSignal});
   final List<int> pages;
   final SlideshowController<ui.Image> controller;
   final ValueChanged<int> onChanged;
+
+  /// Mouse wheel events, heard below both pagers so they can be claimed
+  /// before the pagers scroll.
+  final ValueChanged<PointerSignalEvent> onPointerSignal;
 
   @override
   State<_ArtworkPager> createState() => _ArtworkPagerState();
@@ -1542,51 +1750,57 @@ class _ArtworkPagerState extends State<_ArtworkPager> {
           ? const NeverScrollableScrollPhysics()
           : null,
       onPageChanged: (page) => widget.onChanged(widget.pages[page]),
-      itemBuilder: (context, page) {
-        final index = widget.pages[page];
-        final slide = widget.controller.slideAt(index);
-        final original = widget.controller.imageAt(index);
-        final showThumbnail =
-            appdata.settings['slideshowShowThumbnailWhileLoading'] != false;
-        if (original == null && showThumbnail) {
-          return Image(
-            key: ValueKey('thumbnail:${slide.url}'),
-            image: CachedImageProvider(slide.illust.images[slide.page].medium),
-            fit: BoxFit.contain,
-            gaplessPlayback: true,
-          );
-        }
-        final still = RawImage(
-          key: ValueKey(slide.url),
-          image: original,
-          fit: BoxFit.contain,
-          filterQuality: FilterQuality.high,
-        );
-        if (!slide.illust.isUgoira) return still;
-        // The original is only the first frame; play the animation over it.
-        return Stack(fit: StackFit.expand, children: [
-          still,
-          LayoutBuilder(builder: (context, constraints) {
-            final size = applyBoxFit(
-              BoxFit.contain,
-              Size(slide.illust.width.toDouble(),
-                  slide.illust.height.toDouble()),
-              constraints.biggest,
-            ).destination;
-            return Center(
-              child: UgoiraWidget(
-                key: ValueKey('ugoira:${slide.illust.id}'),
-                id: slide.illust.id.toString(),
-                previewImage:
-                    CachedImageProvider(slide.illust.images[slide.page].large),
-                width: size.width,
-                height: size.height,
-                autoPlay: true,
-              ),
-            );
-          }),
-        ]);
-      },
+      itemBuilder: (context, page) => Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerSignal: widget.onPointerSignal,
+        child: _buildPage(page),
+      ),
     );
+  }
+
+  Widget _buildPage(int page) {
+    final index = widget.pages[page];
+    final slide = widget.controller.slideAt(index);
+    final original = widget.controller.imageAt(index);
+    final showThumbnail =
+        appdata.settings['slideshowShowThumbnailWhileLoading'] != false;
+    if (original == null && showThumbnail) {
+      return Image(
+        key: ValueKey('thumbnail:${slide.url}'),
+        image: CachedImageProvider(slide.illust.images[slide.page].medium),
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+      );
+    }
+    final still = RawImage(
+      key: ValueKey(slide.url),
+      image: original,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+    );
+    if (!slide.illust.isUgoira) return still;
+    // The original is only the first frame; play the animation over it.
+    return Stack(fit: StackFit.expand, children: [
+      still,
+      LayoutBuilder(builder: (context, constraints) {
+        final size = applyBoxFit(
+          BoxFit.contain,
+          Size(slide.illust.width.toDouble(),
+              slide.illust.height.toDouble()),
+          constraints.biggest,
+        ).destination;
+        return Center(
+          child: UgoiraWidget(
+            key: ValueKey('ugoira:${slide.illust.id}'),
+            id: slide.illust.id.toString(),
+            previewImage:
+                CachedImageProvider(slide.illust.images[slide.page].large),
+            width: size.width,
+            height: size.height,
+            autoPlay: true,
+          ),
+        );
+      }),
+    ]);
   }
 }
