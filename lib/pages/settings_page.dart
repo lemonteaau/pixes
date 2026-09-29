@@ -9,9 +9,11 @@ import 'package:pixes/components/message.dart';
 import 'package:pixes/components/page_route.dart';
 import 'package:pixes/components/title_bar.dart';
 import 'package:pixes/foundation/app.dart';
+import 'package:pixes/foundation/fork_build.dart';
 import 'package:pixes/pages/main_page.dart';
 import 'package:pixes/utils/io.dart';
 import 'package:pixes/utils/translation.dart';
+import 'package:pixes/utils/update.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import 'logs.dart';
@@ -188,7 +190,15 @@ class _SettingsPageState extends State<SettingsPage> {
     return SliverToBoxAdapter(
       child: Column(
         children: [
-          buildItem(title: "Version", subtitle: App.version),
+          buildItem(
+              title: "Version",
+              subtitle: ForkBuild.version.isNotEmpty
+                  ? ForkBuild.version
+                  : App.version,
+              action: Button(
+                child: Text("Check for updates".tl),
+                onPressed: () => checkUpdate(manual: true),
+              )),
           buildItem(
               title: "Check for updates on startup".tl,
               action: ToggleSwitch(
@@ -207,7 +217,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   size: 18,
                 ),
                 onPressed: () =>
-                    launchUrlString("https://github.com/wgh136/pixes"),
+                    launchUrlString("https://github.com/${ForkBuild.repository}"),
               )),
           buildItem(
               title: "Telegram",

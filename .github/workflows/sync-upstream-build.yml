@@ -140,9 +140,17 @@ jobs:
 
       - name: Build release APKs
         shell: bash
+        env:
+          COMMIT_SHA: ${{ needs.sync.outputs.commit_sha }}
+          RELEASE_VERSION: ${{ needs.sync.outputs.release_version }}
         run: |
           flutter pub get
-          flutter build apk --release
+          # Every fork build must out-number the one it updates in place.
+          upstream_code="$(sed -n 's/^version:[^+]*+\([0-9]*\).*/\1/p' pubspec.yaml)"
+          build_number=$(( ${upstream_code:-0} * 100000 + GITHUB_RUN_NUMBER ))
+          flutter build apk --release --build-number="$build_number" \
+            --dart-define=FORK_COMMIT="$COMMIT_SHA" \
+            --dart-define=FORK_VERSION="$RELEASE_VERSION"
 
       - name: Upload Android APKs
         uses: actions/upload-artifact@v7
@@ -182,9 +190,14 @@ jobs:
 
       - name: Build unsigned IPA
         shell: bash
+        env:
+          COMMIT_SHA: ${{ needs.sync.outputs.commit_sha }}
+          RELEASE_VERSION: ${{ needs.sync.outputs.release_version }}
         run: |
           flutter pub get
-          flutter build ios --release --no-codesign
+          flutter build ios --release --no-codesign \
+            --dart-define=FORK_COMMIT="$COMMIT_SHA" \
+            --dart-define=FORK_VERSION="$RELEASE_VERSION"
           mkdir -p Payload
           cp -R build/ios/iphoneos/Runner.app Payload/
           zip -r9 pixes-custom-ios-unsigned.ipa Payload

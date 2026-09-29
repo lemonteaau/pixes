@@ -1,5 +1,12 @@
 {
     "zh_CN": {
+        "This build was not published by the fork": "当前不是 fork 发布的版本，无法检查更新",
+        "Failed to check for updates": "检查更新失败",
+        "Already up to date": "已是最新版本",
+        "Current version": "当前版本",
+        "Do not remind": "不再提醒",
+        "Downloading update": "正在下载更新",
+        "Update failed": "更新下载或安装失败",
         "Bookmark failed": "收藏失败",
         "Failed to remove bookmark": "取消收藏失败",
         "Follow failed": "关注失败",
@@ -217,6 +224,13 @@
         "No results found": "未找到结果"
     },
     "zh_TW": {
+        "This build was not published by the fork": "目前不是 fork 發布的版本，無法檢查更新",
+        "Failed to check for updates": "檢查更新失敗",
+        "Already up to date": "已是最新版本",
+        "Current version": "目前版本",
+        "Do not remind": "不再提醒",
+        "Downloading update": "正在下載更新",
+        "Update failed": "更新下載或安裝失敗",
         "Bookmark failed": "收藏失敗",
         "Failed to remove bookmark": "取消收藏失敗",
         "Follow failed": "關注失敗",
@@ -434,6 +448,13 @@
         "No results found": "未找到結果"
     },
     "ko_KR": {
+        "This build was not published by the fork": "포크 배포 빌드가 아니어서 업데이트를 확인할 수 없습니다",
+        "Failed to check for updates": "업데이트 확인 실패",
+        "Already up to date": "최신 버전입니다",
+        "Current version": "현재 버전",
+        "Do not remind": "다시 알리지 않기",
+        "Downloading update": "업데이트 다운로드 중",
+        "Update failed": "업데이트 다운로드 또는 설치 실패",
         "Bookmark failed": "북마크 실패",
         "Failed to remove bookmark": "북마크 해제 실패",
         "Follow failed": "팔로우 실패",
