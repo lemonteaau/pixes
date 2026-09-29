@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:pixes/appdata.dart';
 import 'package:pixes/components/animated_image.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/foundation/history.dart';
 import 'package:pixes/foundation/image_provider.dart';
+import 'package:pixes/foundation/optimistic_toggle.dart';
 import 'package:pixes/network/download.dart';
 import 'package:pixes/pages/related_page.dart';
 import 'package:pixes/utils/translation.dart';
@@ -28,10 +31,10 @@ class IllustWidget extends StatefulWidget {
 }
 
 class _IllustWidgetState extends State<IllustWidget> {
-  bool isBookmarking = false;
-
   final contextController = FlyoutController();
   final contextAttachKey = GlobalKey();
+
+  StreamSubscription<(Object, bool)>? bookmarkChanges;
 
   @override
   void initState() {
@@ -40,12 +43,18 @@ class _IllustWidgetState extends State<IllustWidget> {
         widget.illust.isBookmarked = v;
       });
     };
+    bookmarkChanges = illustBookmarks.changes.listen((change) {
+      if (change.$1 == widget.illust.id && mounted) {
+        setState(() => widget.illust.isBookmarked = change.$2);
+      }
+    });
     super.initState();
   }
 
   @override
   void dispose() {
     IllustWidget.favoriteCallbacks.remove(widget.illust.id.toString());
+    bookmarkChanges?.cancel();
     super.dispose();
   }
 
@@ -277,39 +286,14 @@ class _IllustWidgetState extends State<IllustWidget> {
     );
   }
 
-  void favorite([String type = "public"]) async {
-    if (isBookmarking) return;
-    setState(() {
-      isBookmarking = true;
-    });
-    var method = widget.illust.isBookmarked ? "delete" : "add";
-    var res =
-        await Network().addBookmark(widget.illust.id.toString(), method, type);
-    if (res.error) {
-      if (mounted) {
-        context.showToast(message: "Network Error");
-      }
-    } else {
-      widget.illust.isBookmarked = !widget.illust.isBookmarked;
-    }
-    if (mounted) {
-      setState(() {
-        isBookmarking = false;
-      });
-    }
+  void favorite([String type = "public"]) {
+    setIllustBookmarked(widget.illust, !widget.illust.isBookmarked,
+        restrict: type);
   }
 
   Widget buildButton() {
     Widget child;
-    if (isBookmarking) {
-      child = const SizedBox(
-        width: 14,
-        height: 14,
-        child: ProgressRing(
-          strokeWidth: 1.6,
-        ),
-      );
-    } else if (widget.illust.isBookmarked) {
+    if (widget.illust.isBookmarked) {
       child = Icon(
         MdIcons.favorite,
         color: Colors.red,

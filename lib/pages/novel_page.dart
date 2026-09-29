@@ -10,6 +10,7 @@ import 'package:pixes/components/novel.dart';
 import 'package:pixes/components/title_bar.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/foundation/image_provider.dart';
+import 'package:pixes/foundation/optimistic_toggle.dart';
 import 'package:pixes/network/network.dart';
 import 'package:pixes/pages/comments_page.dart';
 import 'package:pixes/pages/novel_reading_page.dart';
@@ -271,13 +272,10 @@ class _NovelPageState extends State<NovelPage> {
     );
   }
 
-  bool isAddingFavorite = false;
-
   var favoriteFlyout = FlyoutController();
 
   Widget buildActions() {
     void favorite() async {
-      if (isAddingFavorite) return;
       bool? public;
       if (!widget.novel.isBookmarked) {
         await favoriteFlyout.showFlyout(
@@ -306,20 +304,8 @@ class _NovelPageState extends State<NovelPage> {
         }
       }
       setState(() {
-        isAddingFavorite = true;
-      });
-      var res = widget.novel.isBookmarked
-          ? await Network().deleteFavoriteNovel(widget.novel.id.toString())
-          : await Network().favoriteNovel(widget.novel.id.toString(), public!);
-      if (res.error) {
-        if (mounted) {
-          context.showToast(message: res.errorMessage ?? "Network Error");
-        }
-      } else {
-        widget.novel.isBookmarked = !widget.novel.isBookmarked;
-      }
-      setState(() {
-        isAddingFavorite = false;
+        setNovelBookmarked(widget.novel, !widget.novel.isBookmarked,
+            public: public ?? true);
       });
     }
 
@@ -377,15 +363,7 @@ class _NovelPageState extends State<NovelPage> {
                               ? MainAxisAlignment.start
                               : MainAxisAlignment.center,
                           children: [
-                            if (isAddingFavorite)
-                              const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: ProgressRing(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            else if (widget.novel.isBookmarked)
+                            if (widget.novel.isBookmarked)
                               Icon(
                                 MdIcons.favorite,
                                 size: 18,

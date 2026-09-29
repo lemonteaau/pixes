@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 
@@ -16,6 +17,7 @@ import 'package:pixes/components/user_preview.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/foundation/history.dart';
 import 'package:pixes/foundation/image_provider.dart';
+import 'package:pixes/foundation/optimistic_toggle.dart';
 import 'package:pixes/network/download.dart';
 import 'package:pixes/network/network.dart';
 import 'package:pixes/pages/comments_page.dart';
@@ -29,7 +31,6 @@ import 'package:pixes/utils/translation.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
-import '../components/illust_widget.dart';
 import '../components/md.dart';
 import '../components/ugoira.dart';
 
@@ -668,13 +669,31 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
       };
       widget.controller!._follow = follow;
     }
+    _bookmarkChanges = illustBookmarks.changes.listen((change) {
+      if (change.$1 == widget.illust.id && mounted) {
+        setState(() => widget.illust.isBookmarked = change.$2);
+      }
+    });
+    _followChanges = userFollows.changes.listen((change) {
+      if (change.$1 != widget.illust.author.id || !mounted) return;
+      setState(() => widget.illust.author.isFollowed = change.$2);
+      final uid = widget.illust.author.id.toString();
+      UserInfoPage.followCallbacks[uid]?.call(change.$2);
+      UserPreviewWidget.followCallbacks[uid]?.call(change.$2);
+    });
     super.initState();
   }
+
+  StreamSubscription<(Object, bool)>? _bookmarkChanges;
+
+  StreamSubscription<(Object, bool)>? _followChanges;
 
   @override
   void dispose() {
     animationController.dispose();
     _recognizer.dispose();
+    _bookmarkChanges?.cancel();
+    _followChanges?.cancel();
     super.dispose();
   }
 
@@ -821,30 +840,8 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
     );
   }
 
-  bool isFollowing = false;
-
-  void follow() async {
-    if (isFollowing) return;
-    setState(() {
-      isFollowing = true;
-    });
-    var method = widget.illust.author.isFollowed ? "delete" : "add";
-    var res =
-        await Network().follow(widget.illust.author.id.toString(), method);
-    if (res.error) {
-      if (mounted) {
-        context.showToast(message: "Network Error");
-      }
-    } else {
-      widget.illust.author.isFollowed = !widget.illust.author.isFollowed;
-    }
-    setState(() {
-      isFollowing = false;
-    });
-    UserInfoPage.followCallbacks[widget.illust.author.id.toString()]
-        ?.call(widget.illust.author.isFollowed);
-    UserPreviewWidget.followCallbacks[widget.illust.author.id.toString()]
-        ?.call(widget.illust.author.isFollowed);
+  void follow() {
+    setAuthorFollowed(widget.illust.author, !widget.illust.author.isFollowed);
   }
 
   Widget buildAuthor() {
@@ -891,22 +888,7 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
                   maxLines: 2,
                 ),
               ),
-            if (isFollowing)
-              Button(
-                  onPressed: follow,
-                  child: const SizedBox(
-                    width: 42,
-                    height: 24,
-                    child: Center(
-                      child: SizedBox.square(
-                        dimension: 18,
-                        child: ProgressRing(
-                          strokeWidth: 2,
-                        ),
-                      ),
-                    ),
-                  ))
-            else if (!widget.illust.author.isFollowed)
+            if (!widget.illust.author.isFollowed)
               Button(onPressed: follow, child: Text("Follow".tl).fixWidth(62))
             else
               Button(
@@ -922,28 +904,9 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
     );
   }
 
-  bool isBookmarking = false;
-
-  void favorite([String type = "public"]) async {
-    if (isBookmarking) return;
-    setState(() {
-      isBookmarking = true;
-    });
-    var method = widget.illust.isBookmarked ? "delete" : "add";
-    var res =
-        await Network().addBookmark(widget.illust.id.toString(), method, type);
-    if (res.error) {
-      if (mounted) {
-        context.showToast(message: "Network Error");
-      }
-    } else {
-      widget.illust.isBookmarked = !widget.illust.isBookmarked;
-      IllustWidget.favoriteCallbacks[widget.illust.id.toString()]
-          ?.call(widget.illust.isBookmarked);
-    }
-    setState(() {
-      isBookmarking = false;
-    });
+  void favorite([String type = "public"]) {
+    setIllustBookmarked(widget.illust, !widget.illust.isBookmarked,
+        restrict: type);
   }
 
   Iterable<Widget> buildActions(double width) sync* {
@@ -964,15 +927,7 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
         height: 28,
         child: Row(
           children: [
-            if (isBookmarking)
-              const SizedBox(
-                width: 18,
-                height: 18,
-                child: ProgressRing(
-                  strokeWidth: 2,
-                ),
-              )
-            else if (widget.illust.isBookmarked)
+            if (widget.illust.isBookmarked)
               Icon(
                 Icons.favorite,
                 color: ColorScheme.of(context).error,
@@ -1086,15 +1041,7 @@ class _BottomBarState extends State<_BottomBar> with TickerProviderStateMixin {
             height: 28,
             child: Row(
               children: [
-                if (isBookmarking)
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: ProgressRing(
-                      strokeWidth: 2,
-                    ),
-                  )
-                else if (widget.illust.isBookmarked)
+                if (widget.illust.isBookmarked)
                   Icon(
                     Icons.favorite,
                     color: ColorScheme.of(context).error,

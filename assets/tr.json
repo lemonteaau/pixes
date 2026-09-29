@@ -1,5 +1,12 @@
 {
     "zh_CN": {
+        "Bookmark failed": "收藏失败",
+        "Failed to remove bookmark": "取消收藏失败",
+        "Follow failed": "关注失败",
+        "Unfollow failed": "取消关注失败",
+        "Details": "详情",
+        "More": "更多",
+        "Added to downloads": "已加入下载",
         "Slideshow": "自动播放",
         "Bookmarked": "已收藏",
         "Bookmark failed, try again": "收藏失败，请重试",
@@ -210,6 +217,13 @@
         "No results found": "未找到结果"
     },
     "zh_TW": {
+        "Bookmark failed": "收藏失敗",
+        "Failed to remove bookmark": "取消收藏失敗",
+        "Follow failed": "關注失敗",
+        "Unfollow failed": "取消關注失敗",
+        "Details": "詳情",
+        "More": "更多",
+        "Added to downloads": "已加入下載",
         "Slideshow": "自動播放",
         "Bookmarked": "已收藏",
         "Bookmark failed, try again": "收藏失敗，請重試",
@@ -420,6 +434,13 @@
         "No results found": "未找到結果"
     },
     "ko_KR": {
+        "Bookmark failed": "북마크 실패",
+        "Failed to remove bookmark": "북마크 해제 실패",
+        "Follow failed": "팔로우 실패",
+        "Unfollow failed": "언팔로우 실패",
+        "Details": "상세",
+        "More": "더보기",
+        "Added to downloads": "다운로드에 추가됨",
         "Refresh": "새로고침",
         "Search": "검색",
         "Downloading": "다운로드 중",
