@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pixes/appdata.dart';
+import 'package:pixes/foundation/app.dart';
 import 'package:pixes/foundation/slideshow/slideshow_controller.dart';
 import 'package:pixes/network/models.dart';
 import 'package:pixes/network/res.dart';
@@ -42,6 +44,8 @@ void main() {
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     await Translation.init();
+    // Changing playback settings saves them.
+    App.dataPath = Directory.systemTemp.createTempSync('pixes-test').path;
     final recorder = ui.PictureRecorder();
     ui.Canvas(recorder).drawRect(const ui.Rect.fromLTWH(0, 0, 64, 96),
         ui.Paint()..color = const ui.Color(0xff335577));
@@ -63,7 +67,7 @@ void main() {
 
   Future<SlideshowController<ui.Image>> showViewer(WidgetTester tester,
       {bool playing = true,
-      Future<Res<bool>> Function(Illust)? bookmark}) async {
+      Future<Res<bool>> Function(Illust, bool)? bookmark}) async {
     final controller = SlideshowController<ui.Image>(
       initialIllusts: [artwork(1), artwork(2, pages: 2), artwork(3)],
       nextUrl: null,
@@ -77,7 +81,7 @@ void main() {
         nextUrl: null,
         source: '推荐',
         controller: controller,
-        addBookmark: bookmark,
+        setBookmark: bookmark,
       ),
     ));
     await tester.pump();
@@ -112,12 +116,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
   });
 
-  testWidgets('manual swipe near the deadline restarts the ring after settling',
+  testWidgets(
+      'manual swipe near the deadline restarts the clock after settling',
       (tester) async {
     final controller = await showViewer(tester);
-    await tester.pump(const Duration(seconds: 4));
+    await tester.pump(const Duration(milliseconds: 4700));
     final gesture = await tester.startGesture(const Offset(400, 300));
-    await tester.pump(const Duration(seconds: 3));
+    // Hold past the deadline but shorter than a long press, which opens the
+    // more-actions sheet instead.
+    await tester.pump(const Duration(milliseconds: 400));
     expect(controller.current!.illust.id, 1);
     await gesture.moveBy(const Offset(0, -40));
     await tester.pump(const Duration(milliseconds: 16));
@@ -141,20 +148,22 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
   });
 
-  testWidgets('single tap pauses and resumes; indicator stays in the corner',
+  testWidgets('single tap pauses and resumes; progress runs along the bottom',
       (tester) async {
     final controller = await showViewer(tester);
     await tester.pump(const Duration(seconds: 2));
     await tester.tapAt(const Offset(400, 300));
     await tester.pump(const Duration(milliseconds: 400));
     expect(controller.playing, isFalse);
+    expect(find.byKey(const ValueKey('slideshow-paused')), findsOneWidget);
     final frozen = controller.remaining;
-    final ringFinder = find.byKey(const ValueKey('slideshow-countdown'));
-    final ring =
-        tester.widget<CustomPaint>(ringFinder).painter! as SlideshowRingPainter;
-    expect(ring.progress, closeTo(0.4, 0.03));
-    expect(tester.getCenter(ringFinder).dx, greaterThan(700));
-    expect(tester.getCenter(ringFinder).dy, greaterThan(500));
+    final barFinder = find.byKey(const ValueKey('slideshow-progress'));
+    final bar = tester.widget<CustomPaint>(barFinder).painter!
+        as SlideshowProgressPainter;
+    expect(bar.progress, closeTo(0.4, 0.03));
+    expect(bar.paused, isTrue);
+    expect(tester.getSize(barFinder).width, 800);
+    expect(tester.getCenter(barFinder).dy, greaterThan(590));
     await tester.pump(const Duration(seconds: 10));
     expect(controller.remaining, frozen);
     expect(controller.currentIndex, 0);
@@ -169,7 +178,7 @@ void main() {
       (tester) async {
     var calls = 0;
     final response = Completer<Res<bool>>();
-    final controller = await showViewer(tester, bookmark: (_) {
+    final controller = await showViewer(tester, bookmark: (_, __) {
       calls++;
       return response.future;
     });
@@ -183,6 +192,8 @@ void main() {
     await doubleTap();
     expect(controller.playing, isTrue);
     expect(calls, 1);
+    // The heart turns red at once, before the server answers.
+    expect(controller.current!.illust.isBookmarked, isTrue);
     await doubleTap();
     expect(calls, 1);
     response.complete(const Res(true));
@@ -201,7 +212,7 @@ void main() {
       (tester) async {
     final response = Completer<Res<bool>>();
     final controller = await showViewer(tester,
-        playing: false, bookmark: (_) => response.future);
+        playing: false, bookmark: (_, __) => response.future);
     final original = controller.current!.illust;
     await tester.tapAt(const Offset(400, 300));
     await tester.pump(const Duration(milliseconds: 70));
@@ -224,7 +235,7 @@ void main() {
       (tester) async {
     var calls = 0;
     final controller =
-        await showViewer(tester, playing: false, bookmark: (_) async {
+        await showViewer(tester, playing: false, bookmark: (_, __) async {
       calls++;
       return calls == 1 ? Res.error('offline') : const Res(true);
     });
@@ -232,7 +243,7 @@ void main() {
     await tester.tap(heart);
     await tester.pump();
     expect(controller.current!.illust.isBookmarked, isFalse);
-    expect(find.text('收藏失败，请重试'), findsOneWidget);
+    expect(find.text('收藏失败'), findsOneWidget);
     await tester.tap(heart);
     await tester.pump();
     expect(controller.current!.illust.isBookmarked, isTrue);
@@ -240,6 +251,65 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 200));
   });
+  testWidgets('controls fit a phone in landscape', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(640, 320);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    await showViewer(tester, playing: false);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.takeException(), isNull);
+    final heart =
+        tester.getRect(find.byKey(const ValueKey('slideshow-bookmark')));
+    expect(heart.top, greaterThanOrEqualTo(0));
+    expect(heart.bottom, lessThanOrEqualTo(320));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 200));
+  });
+
+  testWidgets('long press opens the more-actions sheet and holds the clock',
+      (tester) async {
+    final controller = await showViewer(tester);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.longPressAt(const Offset(400, 300));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('3s'), findsOneWidget);
+    final held = controller.remaining;
+    await tester.pump(const Duration(seconds: 10));
+    expect(controller.currentIndex, 0);
+    expect(controller.remaining, held);
+    await tester.tap(find.text('3s'));
+    await tester.pump();
+    expect(controller.interval, const Duration(seconds: 3));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 200));
+  });
+
+  testWidgets('controls fade out while playing and come back on pause',
+      (tester) async {
+    final controller = await showViewer(tester);
+    double authorOpacity() => tester
+        .widget<AnimatedOpacity>(find
+            .ancestor(
+                of: find.text('@Artist'),
+                matching: find.byType(AnimatedOpacity))
+            .first)
+        .opacity;
+    expect(authorOpacity(), 1);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(controller.playing, isTrue);
+    expect(authorOpacity(), 0);
+    await tester.tapAt(const Offset(400, 300));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(controller.playing, isFalse);
+    expect(authorOpacity(), 1);
+    await tester.pump(const Duration(seconds: 10));
+    expect(authorOpacity(), 1);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 200));
+  });
+
   testWidgets('automatic playback animates both paging axes in A B1 B2 C order',
       (tester) async {
     final controller = await showViewer(tester);

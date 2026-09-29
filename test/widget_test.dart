@@ -29,7 +29,8 @@ void main() {
     expect(find.byType(SlideshowPage), findsOneWidget);
     expect(find.text('关注 · 自动播放'), findsOneWidget);
     expect(find.text('没有可播放的公开图片'), findsOneWidget);
-    expect(find.text('5 秒 / 张'), findsOneWidget);
+    // Playback speed now lives in the more-actions sheet.
+    expect(find.byIcon(FluentIcons.more), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.tap(find.byIcon(FluentIcons.back));
     await tester.pumpAndSettle();
@@ -49,7 +50,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(find.byKey(const ValueKey('slideshow-countdown')), findsOneWidget);
+      expect(find.byKey(const ValueKey('slideshow-progress')), findsOneWidget);
     }
   });
 
