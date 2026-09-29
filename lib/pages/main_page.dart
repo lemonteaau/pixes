@@ -1,4 +1,5 @@
 import "dart:async";
+import "dart:math" as math;
 
 import "package:fluent_ui/fluent_ui.dart" hide EntrancePageTransition;
 import "package:flutter/foundation.dart";
@@ -32,6 +33,24 @@ import "../utils/debug.dart";
 import "downloading_page.dart";
 
 double get _appBarHeight => App.isDesktop ? 36.0 : 48.0;
+
+/// In the minimal and narrow compact layouts fluent_ui stacks the title bar
+/// over the body and pane, which it places at a fixed [top] that ignores the
+/// status bar and the taller mobile app bar. Returns the space still covered.
+double _underAppBar(BuildContext context, double statusBarHeight, double top) {
+  final view = NavigationView.dataOf(context);
+  final mode =
+      view.isCompactOverlayOpen ? PaneDisplayMode.compact : view.displayMode;
+  final stacked = switch (mode) {
+    PaneDisplayMode.minimal => true,
+    PaneDisplayMode.compact =>
+      MediaQuery.sizeOf(context).width / 2.5 <= kOpenNavigationPaneWidth,
+    _ => false,
+  };
+  if (!stacked) return 0;
+  final appBarBottom = statusBarHeight + _appBarHeight;
+  return math.max(0, appBarBottom - top);
+}
 
 class TitleBarAction {
   final IconData icon;
@@ -140,6 +159,9 @@ class _MainPageState extends State<MainPage> with WindowListener {
       windowButtonKey: windowButtonKey,
     );
 
+    // The pane and body below drop the top padding, so read it here.
+    final statusBarHeight = MediaQuery.paddingOf(context).top;
+
     if (!isLogin) {
       return NavigationView(
         titleBar: titleBar,
@@ -153,9 +175,24 @@ class _MainPageState extends State<MainPage> with WindowListener {
         key: navigationViewKey,
         titleBar: titleBar,
         pane: NavigationPane(
+          // The compact rail cannot be moved below the taller mobile app bar.
+          displayMode: !App.isMobile
+              ? PaneDisplayMode.auto
+              : MediaQuery.sizeOf(context).width >= 1008
+                  ? PaneDisplayMode.expanded
+                  : PaneDisplayMode.minimal,
           selected: index,
-          header: SizedBox(
-            height: MediaQuery.of(context).padding.top,
+          header: Builder(
+            builder: (paneContext) => SizedBox(
+              height: _underAppBar(
+                paneContext,
+                statusBarHeight,
+                NavigationView.dataOf(paneContext).displayMode ==
+                        PaneDisplayMode.minimal
+                    ? 44
+                    : 38,
+              ),
+            ),
           ),
           onChanged: (value) {
             _paneSelectionChanged = true;
@@ -260,21 +297,35 @@ class _MainPageState extends State<MainPage> with WindowListener {
             ),
           ],
         ),
-        paneBodyBuilder: (pane, child) => MediaQuery.removePadding(
-          context: context,
-          removeTop: true,
-          child: Navigator(
-            key: navigatorKey,
-            observers: [_routeStack],
-            onGenerateRoute: (settings) => AppPageRoute(
-              isRoot: true,
-              builder: (context) => _RootPages(
-                current: _currentPage,
-                builders: pageBuilders,
+        paneBodyBuilder: (pane, child) => Builder(
+          builder: (context) => Padding(
+            padding: EdgeInsets.only(
+              top: _underAppBar(
+                context,
+                statusBarHeight,
+                NavigationView.dataOf(context).displayMode ==
+                        PaneDisplayMode.minimal
+                    ? 38
+                    : 32,
+              ),
+            ),
+            child: MediaQuery.removePadding(
+              context: context,
+              removeTop: true,
+              child: Navigator(
+                key: navigatorKey,
+                observers: [_routeStack],
+                onGenerateRoute: (settings) => AppPageRoute(
+                  isRoot: true,
+                  builder: (context) => _RootPages(
+                    current: _currentPage,
+                    builders: pageBuilders,
+                  ),
+                ),
               ),
             ),
           ),
-        ).paddingTop(MediaQuery.of(context).padding.top),
+        ),
       ),
     );
   }
