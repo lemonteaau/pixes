@@ -533,13 +533,6 @@ class Novel {
   final int commentsCount;
   final bool isAi;
 
-  /// 0 for all ages, 1 for R-18 and 2 for R-18G.
-  final int xRestrict;
-
-  bool get isR18 => xRestrict == 1;
-
-  bool get isR18G => xRestrict == 2;
-
   Novel.fromJson(Map<String, dynamic> json)
       : id = json["id"],
         title = json["title"],
@@ -567,8 +560,7 @@ class Novel {
         totalBookmarks = json["total_bookmarks"],
         totalViews = json["total_view"],
         commentsCount = json["total_comments"],
-        isAi = json["novel_ai_type"] == 2,
-        xRestrict = json["x_restrict"] ?? 0;
+        isAi = json["novel_ai_type"] == 2;
 }
 
 class MuteList {

@@ -72,14 +72,10 @@ class NovelBadge extends StatelessWidget {
   }
 }
 
-/// Badges for the age rating, AI generation and series of [novel].
+/// Badges for the AI generation and series of [novel].
 List<Widget> buildNovelBadges(BuildContext context, Novel novel,
     {bool showSeries = true}) {
   return [
-    if (novel.isR18)
-      NovelBadge("R18", color: ColorScheme.of(context).errorContainer),
-    if (novel.isR18G)
-      NovelBadge("R18G", color: ColorScheme.of(context).errorContainer),
     if (novel.isAi)
       NovelBadge("AI", color: ColorScheme.of(context).tertiaryContainer),
     if (showSeries && novel.seriesId != null) NovelBadge("Series".tl),
