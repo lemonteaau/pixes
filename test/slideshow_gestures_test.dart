@@ -25,6 +25,15 @@ class _ImageLoad implements SlideLoad<ui.Image> {
   }
 }
 
+/// The image the bars along the bottom mark as current, and how many there
+/// are.
+(int, int) shownPage(WidgetTester tester) {
+  final painter = tester
+      .widget<CustomPaint>(find.byKey(const ValueKey('slideshow-segments')))
+      .painter! as SlideshowSegmentsPainter;
+  return (painter.current + 1, painter.count);
+}
+
 Future<void> settlePaging(WidgetTester tester) async {
   var settledFrames = 0;
   for (var i = 0; i < 100; i++) {
@@ -103,12 +112,12 @@ void main() {
     await settlePaging(tester);
     expect(controller.current!.illust.id, 2);
     expect(controller.current!.page, 0);
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(shownPage(tester), (1, 2));
     await tester.drag(surface, const Offset(-500, 0));
     await settlePaging(tester);
     expect(controller.current!.illust.id, 2);
     expect(controller.current!.page, 1);
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(shownPage(tester), (2, 2));
     await tester.drag(surface, const Offset(0, -400));
     await settlePaging(tester);
     expect(controller.current!.illust.id, 3);
@@ -147,7 +156,7 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     await settlePaging(tester);
     expect(controller.currentIndex, 2);
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(shownPage(tester), (2, 2));
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 200));
@@ -331,7 +340,7 @@ void main() {
     await settlePaging(tester);
     expect(resumed.current!.illust.id, 2);
     expect(resumed.current!.page, 1);
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(shownPage(tester), (2, 2));
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 200));
 
@@ -396,6 +405,58 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
   });
 
+  test('long works show a window of bars that fades out toward hidden ones',
+      () {
+    List<(int, double, double)> bars(int current) => SlideshowSegmentsPainter(
+            count: 30, current: current, progress: 0, maxVisible: 9)
+        .visibleBars;
+    expect(bars(0).map((b) => b.$1), List.generate(9, (i) => i));
+    // Nothing hidden before the first bar, so only the end fades.
+    expect(bars(0).first.$3, 1.0);
+    expect(bars(0).last.$3, lessThan(0.5));
+    // In the middle, both edges fade and the current bar stays centered.
+    final middle = bars(15);
+    expect(middle.map((b) => b.$1), List.generate(9, (i) => 11 + i));
+    expect(middle.first.$3, lessThan(0.5));
+    expect(middle.last.$3, lessThan(0.5));
+    expect(middle[4].$2, 1.0);
+    expect(bars(29).map((b) => b.$1).last, 29);
+    expect(bars(29).last.$3, 1.0);
+    // Short works show every bar at full size.
+    expect(
+        SlideshowSegmentsPainter(count: 4, current: 1, progress: 0.5)
+            .visibleBars
+            .every((b) => b.$2 == 1 && b.$3 == 1),
+        isTrue);
+  });
+
+  testWidgets('while paused, the bars show briefly when changing images',
+      (tester) async {
+    final controller = await showViewer(tester, playing: false);
+    double barsOpacity() => tester
+        .widget<AnimatedOpacity>(find
+            .ancestor(
+                of: find.byKey(const ValueKey('slideshow-segments')),
+                matching: find.byType(AnimatedOpacity))
+            .first)
+        .opacity;
+    final surface = find.byKey(const ValueKey('slideshow-gestures'));
+    await tester.drag(surface, const Offset(0, -400));
+    await settlePaging(tester);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(barsOpacity(), 0);
+    await tester.drag(surface, const Offset(-500, 0));
+    await settlePaging(tester);
+    expect(controller.current!.page, 1);
+    expect(shownPage(tester), (2, 2));
+    expect(barsOpacity(), 1);
+    await tester.pump(const Duration(seconds: 2));
+    expect(barsOpacity(), 0);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 200));
+  });
+
   testWidgets('automatic playback animates both paging axes in A B1 B2 C order',
       (tester) async {
     final controller = await showViewer(tester);
@@ -403,11 +464,11 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
     await settlePaging(tester);
     expect(controller.currentIndex, 1);
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(shownPage(tester), (1, 2));
     await tester.pump(const Duration(seconds: 5));
     await settlePaging(tester);
     expect(controller.currentIndex, 2);
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(shownPage(tester), (2, 2));
     await tester.pump(const Duration(seconds: 5));
     await settlePaging(tester);
     expect(controller.currentIndex, 3);

@@ -87,6 +87,9 @@ class SlideshowController<T> extends ChangeNotifier {
   List<Illust> get illusts =>
       [for (final pages in _works) _slides[pages.first].illust];
   int get currentIndex => _index;
+
+  /// The slide being moved to while [busy], otherwise the current one.
+  int get targetIndex => busy ? _target : _index;
   Duration get interval => _interval;
   int get position => _index + 1;
   int get workCount => _works.length;

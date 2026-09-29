@@ -106,6 +106,12 @@ class _SlideshowPageState extends State<SlideshowPage>
   bool _pinchHandled = false;
 
   DateTime _lastWheel = DateTime(0);
+
+  /// Briefly shows the image bars of a multi-image work while paused, when
+  /// the user moves between its images.
+  bool _pageHint = false;
+  Timer? _pageHintTimer;
+  int _hintedTarget = -1;
   DateTime _lastWheelPage = DateTime(0);
 
   static const _overlayFadeDuration = Duration(milliseconds: 250);
@@ -214,10 +220,29 @@ class _SlideshowPageState extends State<SlideshowPage>
     }
   }
 
+  void _flashPageHint() {
+    _pageHintTimer?.cancel();
+    if (!_pageHint) setState(() => _pageHint = true);
+    _pageHintTimer = Timer(const Duration(milliseconds: 1200), () {
+      if (mounted && !_scrolling) setState(() => _pageHint = false);
+    });
+  }
+
   void _update() {
     if (!mounted) return;
     _updateCountdown();
     _recordHistory();
+    final target = _controller.targetIndex;
+    if (target != _hintedTarget) {
+      final first = _hintedTarget < 0;
+      _hintedTarget = target;
+      if (!first &&
+          target >= 0 &&
+          target < _controller.slideCount &&
+          _controller.pagesOf(_controller.workOf(target)).length > 1) {
+        _flashPageHint();
+      }
+    }
     if (_controller.playing != _wasPlaying) {
       _wasPlaying = _controller.playing;
       // Pausing or resuming shows the controls, then leaves just the artwork.
@@ -374,6 +399,7 @@ class _SlideshowPageState extends State<SlideshowPage>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _releaseTouch();
+        if (_pageHint) _flashPageHint();
         // While playing, a manual swipe shows who made the new work, then
         // gets out of the way. While paused the artwork stays on its own;
         // controls that were already up just resume fading out.
@@ -654,6 +680,7 @@ class _SlideshowPageState extends State<SlideshowPage>
     _tapTimer?.cancel();
     _messageTimer?.cancel();
     _hideTimer?.cancel();
+    _pageHintTimer?.cancel();
     _bookmarkChanges?.cancel();
     _followChanges?.cancel();
     _controller.removeListener(_update);
@@ -810,17 +837,6 @@ class _SlideshowPageState extends State<SlideshowPage>
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (pages.length > 1)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _Pill(
-                    child: Text(
-                      '${pages.indexOf(_controller.currentIndex) + 1} / ${pages.length}',
-                      key: const ValueKey('image-page-indicator'),
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-                ),
               GestureDetector(
                 onTap: () => _openAuthor(illust.author),
                 child: Text(
@@ -945,6 +961,32 @@ class _SlideshowPageState extends State<SlideshowPage>
 
   Widget _progress() {
     final bottom = MediaQuery.paddingOf(context).bottom;
+    final target = _controller.targetIndex;
+    final pages = target >= 0 && target < _controller.slideCount
+        ? _controller.pagesOf(_controller.workOf(target))
+        : const <int>[];
+    if (pages.length > 1) {
+      return Positioned(
+        left: 12,
+        right: 12,
+        bottom: bottom + 6,
+        height: 3,
+        child: IgnorePointer(
+          child: AnimatedOpacity(
+            opacity:
+                _controller.playing || _controlsVisible || _pageHint ? 1 : 0,
+            duration: _overlayFadeDuration,
+            child: _SegmentedProgress(
+              count: pages.length,
+              current: pages.indexOf(target),
+              countdown: _countdown,
+              paused: !_controller.playing,
+              loading: _controller.busy,
+            ),
+          ),
+        ),
+      );
+    }
     return Positioned(
       left: 0,
       right: 0,
@@ -1398,6 +1440,185 @@ class _LoadingLinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_LoadingLinePainter oldDelegate) => oldDelegate.t != t;
+}
+
+/// One bar per image of a work, like the image posts of short-video apps:
+/// the images before the current one are full, the current one fills as it
+/// plays, and a long work shows a window of bars that fade out at the edges.
+class _SegmentedProgress extends StatefulWidget {
+  const _SegmentedProgress({
+    required this.count,
+    required this.current,
+    required this.countdown,
+    required this.paused,
+    required this.loading,
+  });
+
+  final int count;
+  final int current;
+  final Animation<double> countdown;
+  final bool paused;
+
+  /// Whether the current image is still loading.
+  final bool loading;
+
+  @override
+  State<_SegmentedProgress> createState() => _SegmentedProgressState();
+}
+
+class _SegmentedProgressState extends State<_SegmentedProgress>
+    with SingleTickerProviderStateMixin {
+  late final _sweep = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _syncSweep();
+  }
+
+  @override
+  void didUpdateWidget(_SegmentedProgress oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncSweep();
+  }
+
+  void _syncSweep() {
+    if (widget.loading && !_sweep.isAnimating) {
+      _sweep.repeat();
+    } else if (!widget.loading && _sweep.isAnimating) {
+      _sweep.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _sweep.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '${widget.current + 1} / ${widget.count}',
+      child: LayoutBuilder(builder: (context, constraints) {
+        final maxVisible = (constraints.maxWidth / 28).floor().clamp(5, 12);
+        return AnimatedBuilder(
+          animation: Listenable.merge([widget.countdown, _sweep]),
+          builder: (context, _) => CustomPaint(
+            key: const ValueKey('slideshow-segments'),
+            size: Size(constraints.maxWidth, 3),
+            painter: SlideshowSegmentsPainter(
+              count: widget.count,
+              current: widget.current,
+              progress: widget.loading ? 0 : widget.countdown.value,
+              paused: widget.paused,
+              sweep: widget.loading ? _sweep.value : null,
+              maxVisible: maxVisible,
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class SlideshowSegmentsPainter extends CustomPainter {
+  const SlideshowSegmentsPainter({
+    required this.count,
+    required this.current,
+    required this.progress,
+    this.paused = false,
+    this.sweep,
+    this.maxVisible = 12,
+  });
+
+  final int count;
+  final int current;
+  final double progress;
+  final bool paused;
+
+  /// The phase of the loading sweep on the current bar, while it loads.
+  final double? sweep;
+  final int maxVisible;
+
+  static const _gap = 4.0;
+
+  /// The bars on screen: their image indices, and how wide and bright each
+  /// one is. The two bars at an edge with more images beyond it shrink and
+  /// fade, hinting at the rest.
+  List<(int index, double weight, double opacity)> get visibleBars {
+    if (count <= maxVisible) {
+      return [for (var i = 0; i < count; i++) (i, 1.0, 1.0)];
+    }
+    final start =
+        (current - maxVisible ~/ 2).clamp(0, count - maxVisible).toInt();
+    final end = start + maxVisible;
+    // How far each bar is from an edge that hides more bars.
+    int fromHiddenEdge(int i) => math.min(
+          start > 0 ? i - start : maxVisible,
+          end < count ? end - 1 - i : maxVisible,
+        );
+    return [
+      for (var i = start; i < end; i++)
+        switch (fromHiddenEdge(i)) {
+          0 => (i, 0.45, 0.35),
+          1 => (i, 0.75, 0.65),
+          _ => (i, 1.0, 1.0),
+        },
+    ];
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bars = visibleBars;
+    final totalWeight = bars.fold(0.0, (sum, bar) => sum + bar.$2);
+    final width = size.width - _gap * (bars.length - 1);
+    final radius = Radius.circular(size.height / 2);
+    final fill = paused ? const Color(0xFFFFFFFF) : const Color(0xE6FFFFFF);
+    var left = 0.0;
+    for (final (index, weight, opacity) in bars) {
+      final barWidth = width * weight / totalWeight;
+      final rect = Rect.fromLTWH(left, 0, barWidth, size.height);
+      canvas.save();
+      canvas.clipRRect(RRect.fromRectAndRadius(rect, radius));
+      canvas.drawRect(
+          rect, Paint()..color = Color.fromRGBO(255, 255, 255, 0.3 * opacity));
+      final amount = index < current
+          ? 1.0
+          : index == current
+              ? progress.clamp(0.0, 1.0)
+              : 0.0;
+      if (amount > 0) {
+        canvas.drawRect(
+          Rect.fromLTWH(left, 0, barWidth * amount, size.height),
+          Paint()..color = fill.withValues(alpha: fill.a * opacity),
+        );
+      }
+      final t = sweep;
+      if (index == current && t != null) {
+        final half = barWidth / 2 * Curves.easeOut.transform(t);
+        final center = left + barWidth / 2;
+        canvas.drawRect(
+          Rect.fromLTRB(center - half, 0, center + half, size.height),
+          Paint()..color = Color.fromRGBO(255, 255, 255, 0.8 * (1 - t)),
+        );
+      }
+      canvas.restore();
+      left += barWidth + _gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(SlideshowSegmentsPainter oldDelegate) =>
+      oldDelegate.count != count ||
+      oldDelegate.current != current ||
+      oldDelegate.progress != progress ||
+      oldDelegate.paused != paused ||
+      oldDelegate.sweep != sweep ||
+      oldDelegate.maxVisible != maxVisible;
 }
 
 class SlideshowProgressPainter extends CustomPainter {
