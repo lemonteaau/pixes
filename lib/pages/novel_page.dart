@@ -9,7 +9,9 @@ import 'package:pixes/components/md.dart';
 import 'package:pixes/components/novel.dart';
 import 'package:pixes/components/title_bar.dart';
 import 'package:pixes/foundation/app.dart';
+import 'package:intl/intl.dart';
 import 'package:pixes/foundation/image_provider.dart';
+import 'package:pixes/foundation/novel_progress.dart';
 import 'package:pixes/foundation/optimistic_toggle.dart';
 import 'package:pixes/network/network.dart';
 import 'package:pixes/pages/comments_page.dart';
@@ -64,9 +66,10 @@ class _NovelPageState extends State<NovelPage> {
   }
 
   Widget buildTop() {
+    final badges = buildNovelBadges(context, widget.novel, showSeries: false);
     return Card(
         child: SizedBox(
-      height: 128,
+      height: 144,
       child: Row(
         children: [
           Container(
@@ -90,14 +93,32 @@ class _NovelPageState extends State<NovelPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                Text(widget.novel.title,
-                    maxLines: 3,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    )),
+                Expanded(
+                  child: Text(widget.novel.title,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      )),
+                ),
                 const SizedBox(height: 4),
-                const Spacer(),
+                Row(
+                  children: [
+                    for (final badge in badges) badge.paddingRight(4),
+                    Flexible(
+                      child: Text(
+                        novelLengthText(widget.novel),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: ColorScheme.of(context).outline,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 if (widget.novel.seriesId != null)
                   Text(
                     overflow: TextOverflow.ellipsis,
@@ -151,7 +172,7 @@ class _NovelPageState extends State<NovelPage> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    widget.novel.totalViews.toString(),
+                    formatCount(widget.novel.totalViews),
                     style: TextStyle(
                       color: ColorScheme.of(context).primary,
                       fontWeight: FontWeight.w500,
@@ -191,7 +212,7 @@ class _NovelPageState extends State<NovelPage> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  widget.novel.totalBookmarks.toString(),
+                  formatCount(widget.novel.totalBookmarks),
                   style: TextStyle(
                     color: ColorScheme.of(context).primary,
                     fontWeight: FontWeight.w500,
@@ -254,7 +275,8 @@ class _NovelPageState extends State<NovelPage> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        widget.novel.createDate.toString().substring(0, 10),
+                        DateFormat("yyyy-MM-dd")
+                            .format(widget.novel.createDate.toLocal()),
                         style: TextStyle(
                           fontSize: 12,
                           color: ColorScheme.of(context).outline,
@@ -270,6 +292,51 @@ class _NovelPageState extends State<NovelPage> {
         ),
       ),
     );
+  }
+
+  /// Opens [page] and refreshes the reading progress shown here once the
+  /// user comes back.
+  void openReader(Widget page) {
+    context.to(() => page).then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// Offers to go back to the chapter of the series that was read last, if
+  /// it's not this one.
+  Widget buildSeriesContinue() {
+    final seriesId = widget.novel.seriesId;
+    if (seriesId == null) return const SizedBox.shrink();
+    final last = NovelProgressStore.instance.getSeries(seriesId);
+    if (last == null || last.novelId == widget.novel.id) {
+      return const SizedBox.shrink();
+    }
+    final label = last.chapter != null
+        ? "Continue chapter @n".tl.replaceAll("@n", "${last.chapter}")
+        : "Continue Reading".tl;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 560),
+      child: Button(
+        onPressed: () {
+          openReader(NovelReadingPageWithId(last.novelId.toString(),
+              resume: true));
+        },
+        child: Row(
+          children: [
+            const Icon(MdIcons.history, size: 18),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                "$label · ${last.title}",
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const Icon(MdIcons.chevron_right, size: 18),
+          ],
+        ).fixHeight(32),
+      ),
+    ).paddingTop(8).paddingHorizontal(2);
   }
 
   var favoriteFlyout = FlyoutController();
@@ -333,6 +400,16 @@ class _NovelPageState extends State<NovelPage> {
               builder: (context, constrains) {
                 var width = constrains.maxWidth;
                 bool shouldFillSpace = width < 500;
+                bool showLabels = constrains.maxWidth > 420;
+                Widget sized(Widget child, double fillWidth) {
+                  return (shouldFillSpace ? child.fixWidth(fillWidth) : child)
+                      .fixHeight(32);
+                }
+
+                final progress =
+                    NovelProgressStore.instance.get(widget.novel.id);
+                final canContinue = progress != null && !progress.isFinished;
+                final comments = widget.novel.commentsCount;
                 return Row(
                   children: [
                     FilledButton(
@@ -340,8 +417,15 @@ class _NovelPageState extends State<NovelPage> {
                           children: [
                             const Icon(MdIcons.menu_book_outlined, size: 18),
                             const SizedBox(width: 12),
-                            Text("Read".tl),
-                            const Spacer(),
+                            Expanded(
+                              child: Text(
+                                canContinue
+                                    ? "Continue Reading".tl
+                                    : "Read".tl,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                             const Icon(MdIcons.chevron_right, size: 18)
                                 .paddingTop(2),
                           ],
@@ -351,54 +435,77 @@ class _NovelPageState extends State<NovelPage> {
                                 : 220)
                             .fixHeight(32),
                         onPressed: () {
-                          context.to(() => NovelReadingPage(widget.novel));
+                          openReader(NovelReadingPage(widget.novel,
+                              resume: canContinue));
                         }),
                     const SizedBox(width: 16),
                     FlyoutTarget(
                       controller: favoriteFlyout,
                       child: Button(
                         onPressed: favorite,
-                        child: Row(
-                          mainAxisAlignment: constrains.maxWidth > 420
-                              ? MainAxisAlignment.start
-                              : MainAxisAlignment.center,
-                          children: [
-                            if (widget.novel.isBookmarked)
-                              Icon(
-                                MdIcons.favorite,
-                                size: 18,
-                                color: ColorScheme.of(context).error,
-                              )
-                            else
-                              const Icon(MdIcons.favorite_outline, size: 18),
-                            if (constrains.maxWidth > 420)
-                              const SizedBox(width: 12),
-                            if (constrains.maxWidth > 420) Text("Favorite".tl)
-                          ],
-                        )
-                            .fixWidth(shouldFillSpace
-                                ? width / 4 - 4 - kFluentButtonPadding
-                                : 64)
-                            .fixHeight(32),
+                        child: sized(
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: showLabels
+                                ? MainAxisAlignment.start
+                                : MainAxisAlignment.center,
+                            children: [
+                              if (widget.novel.isBookmarked)
+                                Icon(
+                                  MdIcons.favorite,
+                                  size: 18,
+                                  color: ColorScheme.of(context).error,
+                                )
+                              else
+                                const Icon(MdIcons.favorite_outline, size: 18),
+                              if (showLabels) const SizedBox(width: 12),
+                              if (showLabels)
+                                Flexible(
+                                  child: Text(
+                                    "Favorite".tl,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          width / 4 - 4 - kFluentButtonPadding,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Button(
-                        child: Row(
-                          mainAxisAlignment: constrains.maxWidth > 420
-                              ? MainAxisAlignment.start
-                              : MainAxisAlignment.center,
-                          children: [
-                            const Icon(MdIcons.comment, size: 18),
-                            if (constrains.maxWidth > 420)
-                              const SizedBox(width: 12),
-                            if (constrains.maxWidth > 420) Text("Comments".tl)
-                          ],
-                        )
-                            .fixWidth(shouldFillSpace
-                                ? width / 4 - 4 - kFluentButtonPadding
-                                : 64)
-                            .fixHeight(32),
+                        child: sized(
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: showLabels
+                                ? MainAxisAlignment.start
+                                : MainAxisAlignment.center,
+                            children: [
+                              const Icon(MdIcons.comment, size: 18),
+                              if (showLabels) const SizedBox(width: 12),
+                              if (showLabels)
+                                Flexible(
+                                  child: Text(
+                                    "Comments".tl,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              if (comments > 0) ...[
+                                SizedBox(width: showLabels ? 6 : 4),
+                                Text(
+                                  formatCount(comments),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: ColorScheme.of(context).outline,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          width / 4 - 4 - kFluentButtonPadding,
+                        ),
                         onPressed: () {
                           CommentsPage.show(context, widget.novel.id.toString(),
                               isNovel: true);
@@ -407,6 +514,7 @@ class _NovelPageState extends State<NovelPage> {
                 );
               },
             ).paddingHorizontal(2),
+            buildSeriesContinue(),
             SelectableText(
               "ID: ${widget.novel.id}",
               style: TextStyle(
@@ -467,12 +575,13 @@ class _NovelPageState extends State<NovelPage> {
           const SizedBox(height: 12),
           Button(
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(MdIcons.bookmark_outline, size: 18),
+                  const Icon(MdIcons.auto_awesome_outlined, size: 18),
                   const SizedBox(width: 12),
                   Text("Related".tl)
                 ],
-              ).fixWidth(64).fixHeight(32),
+              ).fixHeight(32),
               onPressed: () {
                 context
                     .to(() => _RelatedNovelsPage(widget.novel.id.toString()));
