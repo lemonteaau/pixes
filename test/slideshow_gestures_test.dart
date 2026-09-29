@@ -424,7 +424,7 @@ void main() {
     expect(bars(29).last.$3, 1.0);
     // Short works show every bar at full size.
     expect(
-        SlideshowSegmentsPainter(count: 4, current: 1, progress: 0.5)
+        const SlideshowSegmentsPainter(count: 4, current: 1, progress: 0.5)
             .visibleBars
             .every((b) => b.$2 == 1 && b.$3 == 1),
         isTrue);

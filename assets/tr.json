@@ -1,5 +1,12 @@
 {
     "zh_CN": {
+        "Cache": "缓存",
+        "Image cache": "图片缓存",
+        "Calculating...": "计算中...",
+        "Clear": "清理",
+        "Cache cleared": "缓存已清理",
+        "Cache size limit": "缓存上限",
+        "Artworks viewed least recently are removed when the cache grows past this": "超过上限时，自动删除最久没看过的图片",
         "Classic artwork viewer": "使用旧版作品浏览界面",
         "Open artworks in detail pages instead of the full-screen player": "点开作品时进入详情页，而不是全屏播放界面",
         "View original": "查看原图",
@@ -239,6 +246,13 @@
         "No results found": "未找到结果"
     },
     "zh_TW": {
+        "Cache": "快取",
+        "Image cache": "圖片快取",
+        "Calculating...": "計算中...",
+        "Clear": "清理",
+        "Cache cleared": "快取已清理",
+        "Cache size limit": "快取上限",
+        "Artworks viewed least recently are removed when the cache grows past this": "超過上限時，自動刪除最久沒看過的圖片",
         "Classic artwork viewer": "使用舊版作品瀏覽介面",
         "Open artworks in detail pages instead of the full-screen player": "點開作品時進入詳情頁，而不是全螢幕播放介面",
         "View original": "查看原圖",
@@ -478,6 +492,13 @@
         "No results found": "未找到結果"
     },
     "ko_KR": {
+        "Cache": "캐시",
+        "Image cache": "이미지 캐시",
+        "Calculating...": "계산 중...",
+        "Clear": "정리",
+        "Cache cleared": "캐시를 정리했습니다",
+        "Cache size limit": "캐시 한도",
+        "Artworks viewed least recently are removed when the cache grows past this": "한도를 넘으면 가장 오래 보지 않은 이미지부터 자동으로 삭제합니다",
         "Classic artwork viewer": "이전 작품 보기 화면 사용",
         "Open artworks in detail pages instead of the full-screen player": "작품을 전체 화면 플레이어 대신 상세 페이지로 엽니다",
         "View original": "원본 보기",

@@ -9,6 +9,7 @@ import 'package:pixes/components/message.dart';
 import 'package:pixes/components/page_route.dart';
 import 'package:pixes/components/title_bar.dart';
 import 'package:pixes/foundation/app.dart';
+import 'package:pixes/foundation/cache_manager.dart';
 import 'package:pixes/foundation/fork_build.dart';
 import 'package:pixes/pages/main_page.dart';
 import 'package:pixes/utils/io.dart';
@@ -40,6 +41,8 @@ class _SettingsPageState extends State<SettingsPage> {
           buildBrowse(),
           buildHeader("Download".tl),
           buildDownload(),
+          buildHeader("Cache".tl),
+          buildCache(),
           buildHeader("Appearance".tl),
           buildAppearance(),
           buildHeader("About".tl),
@@ -240,6 +243,71 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
     );
+  }
+
+  bool _clearingCache = false;
+
+  Widget buildCache() {
+    final cache = CacheManager();
+    if (!cache.isSizeKnown) {
+      cache.ready.then((_) {
+        if (mounted) setState(() {});
+      });
+    }
+    final limitGB = cache.limitSize ~/ (1024 * 1024 * 1024);
+    return SliverToBoxAdapter(
+      child: Column(
+        children: [
+          buildItem(
+              title: "Image cache".tl,
+              subtitle: cache.isSizeKnown
+                  ? "${_formatBytes(cache.currentSize)} / $limitGB GB"
+                  : "Calculating...".tl,
+              action: Button(
+                key: const ValueKey("clear-cache"),
+                onPressed: _clearingCache
+                    ? null
+                    : () async {
+                        setState(() => _clearingCache = true);
+                        await cache.clear();
+                        if (!mounted) return;
+                        setState(() => _clearingCache = false);
+                        showToast(context, message: "Cache cleared".tl);
+                      },
+                child: Text("Clear".tl).fixWidth(64),
+              )),
+          buildItem(
+              title: "Cache size limit".tl,
+              subtitle:
+                  "Artworks viewed least recently are removed when the cache grows past this"
+                      .tl,
+              action: DropDownButton(
+                  title: Text("$limitGB GB"),
+                  items: [
+                    for (final gb in cacheSizeLimitOptions)
+                      MenuFlyoutItem(
+                          text: Text("$gb GB"),
+                          onPressed: () {
+                            setState(() {
+                              appdata.settings["cacheSizeLimitGB"] = gb;
+                            });
+                            appdata.writeSettings();
+                            cache.checkCache().then((_) {
+                              if (mounted) setState(() {});
+                            });
+                          }),
+                  ])),
+        ],
+      ),
+    );
+  }
+
+  static String _formatBytes(int bytes) {
+    const mb = 1024 * 1024;
+    if (bytes >= 1024 * mb) {
+      return "${(bytes / (1024 * mb)).toStringAsFixed(2)} GB";
+    }
+    return "${(bytes / mb).toStringAsFixed(1)} MB";
   }
 
   Widget buildBrowse() {
