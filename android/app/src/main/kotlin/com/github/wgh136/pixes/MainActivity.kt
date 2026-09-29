@@ -1,4 +1,4 @@
-package dev.nyne.pixes
+package com.github.wgh136.pixes
 
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugins.GeneratedPluginRegistrant
