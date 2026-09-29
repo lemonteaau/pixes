@@ -2,6 +2,7 @@ import 'package:fluent_ui/fluent_ui.dart' hide TitleBar;
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:pixes/appdata.dart';
 import 'package:pixes/components/loading.dart';
+import 'package:pixes/components/lazy_indexed_stack.dart';
 import 'package:pixes/components/segmented_button.dart';
 import 'package:pixes/components/title_bar.dart';
 import 'package:pixes/foundation/app.dart';
@@ -21,6 +22,7 @@ class HistoryPage extends StatefulWidget {
 
 class _HistoryPageState extends State<HistoryPage> {
   int page = 0;
+  final localPageKey = GlobalKey<_LocalHistoryPageState>();
   final networkPageKey = GlobalKey<_NetworkHistoryPageState>();
 
   @override
@@ -29,7 +31,13 @@ class _HistoryPageState extends State<HistoryPage> {
       children: [
         TitleBar(
           title: "History".tl,
-          onRefresh: page == 1 ? () => networkPageKey.currentState?.refresh() : null,
+          onRefresh: () {
+            if (page == 0) {
+              localPageKey.currentState?.refresh();
+            } else {
+              networkPageKey.currentState?.refresh();
+            }
+          },
           action: SegmentedButton<int>(
             options: [
               SegmentedButtonOption(
@@ -50,11 +58,14 @@ class _HistoryPageState extends State<HistoryPage> {
           ),
         ),
         Expanded(
-          child: page == 0
-              ? const LocalHistoryPage()
-              : NetworkHistoryPage(
-                  key: networkPageKey,
-                ),
+          child: LazyIndexedStack<int>(
+            current: page,
+            builder: (context, page) => page == 0
+                ? LocalHistoryPage(key: localPageKey)
+                : NetworkHistoryPage(
+                    key: networkPageKey,
+                  ),
+          ),
         ),
       ],
     );
@@ -72,6 +83,20 @@ class _LocalHistoryPageState extends State<LocalHistoryPage> {
   int page = 1;
 
   var data = <IllustHistory>[];
+
+  bool visible = true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Kept alive while hidden; show artworks viewed meanwhile.
+    final visible = PageVisibility.of(context);
+    if (visible && !this.visible) {
+      page = 1;
+      data = [];
+    }
+    this.visible = visible;
+  }
 
   Future<void> refresh() async {
     setState(() {
@@ -91,9 +116,14 @@ class _LocalHistoryPageState extends State<LocalHistoryPage> {
         ),
         itemCount: HistoryManager().length,
         itemBuilder: (context, index) {
-          if (index == data.length) {
-            data.addAll(HistoryManager().getHistories(page));
+          while (index >= data.length) {
+            final more = HistoryManager().getHistories(page);
+            if (more.isEmpty) break;
+            data.addAll(more);
             page++;
+          }
+          if (index >= data.length) {
+            return const SizedBox.shrink();
           }
           return IllustHistoryWidget(data[index]);
         },

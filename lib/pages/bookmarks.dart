@@ -11,6 +11,7 @@ import 'package:pixes/pages/illust_page.dart';
 import 'package:pixes/utils/translation.dart';
 
 import '../components/illust_widget.dart';
+import '../components/lazy_indexed_stack.dart';
 import '../components/loading.dart';
 
 class BookMarkedArtworkPage extends StatefulWidget {
@@ -22,7 +23,7 @@ class BookMarkedArtworkPage extends StatefulWidget {
 
 class _BookMarkedArtworkPageState extends State<BookMarkedArtworkPage> {
   String restrict = "public";
-  final pageKey = GlobalKey<_OneBookmarkedPageState>();
+  final pageKeys = <String, GlobalKey<_OneBookmarkedPageState>>{};
 
   @override
   Widget build(BuildContext context) {
@@ -30,9 +31,12 @@ class _BookMarkedArtworkPageState extends State<BookMarkedArtworkPage> {
       children: [
         buildTab(),
         Expanded(
-          child: _OneBookmarkedPage(
-            restrict,
-            key: pageKey,
+          child: LazyIndexedStack<String>(
+            current: restrict,
+            builder: (context, restrict) => _OneBookmarkedPage(
+              restrict,
+              key: pageKeys.putIfAbsent(restrict, GlobalKey.new),
+            ),
           ),
         )
       ],
@@ -41,15 +45,17 @@ class _BookMarkedArtworkPageState extends State<BookMarkedArtworkPage> {
 
   Widget buildTab() {
     return TitleBar(
+      wrapActions: true,
       title: "Bookmarks".tl,
-      onRefresh: () => pageKey.currentState?.refresh(),
+      onRefresh: () => pageKeys[restrict]?.currentState?.refresh(),
       action: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           SlideshowButton(
             source: 'Bookmarks'.tl,
-            illusts: () => pageKey.currentState?.loadedData ?? [],
+            illusts: () => pageKeys[restrict]?.currentState?.loadedData ?? [],
             nextUrl: () =>
-                pageKey.currentState?.nextUrl ??
+                pageKeys[restrict]?.currentState?.nextUrl ??
                 '/v1/user/bookmarks/illust?user_id=${appdata.account?.user.id}&restrict=$restrict',
           ),
           const SizedBox(width: 8),
@@ -89,15 +95,6 @@ class _OneBookmarkedPage extends StatefulWidget {
 
 class _OneBookmarkedPageState
     extends MultiPageLoadingState<_OneBookmarkedPage, Illust> {
-  @override
-  void didUpdateWidget(covariant _OneBookmarkedPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.restrict != widget.restrict) {
-      nextUrl = null;
-      reset();
-    }
-  }
-
   @override
   Future<void> refresh() {
     nextUrl = null;

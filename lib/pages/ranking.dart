@@ -6,6 +6,7 @@ import 'package:pixes/utils/translation.dart';
 
 import '../components/batch_download.dart';
 import '../components/illust_widget.dart';
+import '../components/lazy_indexed_stack.dart';
 import '../components/loading.dart';
 import '../components/title_bar.dart';
 import '../network/network.dart';
@@ -20,7 +21,7 @@ class RankingPage extends StatefulWidget {
 
 class _RankingPageState extends State<RankingPage> {
   String type = "day";
-  final pageKey = GlobalKey<_OneRankingPageState>();
+  final pageKeys = <String, GlobalKey<_OneRankingPageState>>{};
 
   /// mode: day, week, month, day_male, day_female, week_original, week_rookie, day_manga, week_manga, month_manga, day_r18_manga, day_r18
   static const types = {
@@ -45,9 +46,12 @@ class _RankingPageState extends State<RankingPage> {
         children: [
           buildHeader(),
           Expanded(
-            child: _OneRankingPage(
-              type,
-              key: pageKey,
+            child: LazyIndexedStack<String>(
+              current: type,
+              builder: (context, type) => _OneRankingPage(
+                type,
+                key: pageKeys.putIfAbsent(type, GlobalKey.new),
+              ),
             ),
           ),
         ],
@@ -58,7 +62,7 @@ class _RankingPageState extends State<RankingPage> {
   Widget buildHeader() {
     return TitleBar(
       title: "Ranking".tl,
-      onRefresh: () => pageKey.currentState?.refresh(),
+      onRefresh: () => pageKeys[type]?.currentState?.refresh(),
       action: Row(
         children: [
           BatchDownloadButton(request: () => Network().getRanking(type)),
@@ -95,15 +99,6 @@ class _OneRankingPage extends StatefulWidget {
 
 class _OneRankingPageState
     extends MultiPageLoadingState<_OneRankingPage, Illust> {
-  @override
-  void didUpdateWidget(covariant _OneRankingPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.type != widget.type) {
-      nextUrl = null;
-      reset();
-    }
-  }
-
   @override
   Future<void> refresh() {
     nextUrl = null;

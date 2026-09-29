@@ -1,9 +1,11 @@
 import "dart:async";
+import "dart:math" as math;
 
-import "package:fluent_ui/fluent_ui.dart";
+import "package:fluent_ui/fluent_ui.dart" hide EntrancePageTransition;
 import "package:flutter/foundation.dart";
 import "package:pixes/appdata.dart";
 import "package:pixes/components/md.dart";
+import "package:pixes/components/lazy_indexed_stack.dart";
 import "package:pixes/foundation/app.dart";
 import "package:pixes/foundation/image_provider.dart";
 import "package:pixes/network/network.dart";
@@ -31,6 +33,24 @@ import "../utils/debug.dart";
 import "downloading_page.dart";
 
 double get _appBarHeight => App.isDesktop ? 36.0 : 48.0;
+
+/// In the minimal and narrow compact layouts fluent_ui stacks the title bar
+/// over the body and pane, which it places at a fixed [top] that ignores the
+/// status bar and the taller mobile app bar. Returns the space still covered.
+double _underAppBar(BuildContext context, double statusBarHeight, double top) {
+  final view = NavigationView.dataOf(context);
+  final mode =
+      view.isCompactOverlayOpen ? PaneDisplayMode.compact : view.displayMode;
+  final stacked = switch (mode) {
+    PaneDisplayMode.minimal => true,
+    PaneDisplayMode.compact =>
+      MediaQuery.sizeOf(context).width / 2.5 <= kOpenNavigationPaneWidth,
+    _ => false,
+  };
+  if (!stacked) return 0;
+  final appBarBottom = statusBarHeight + _appBarHeight;
+  return math.max(0, appBarBottom - top);
+}
 
 class TitleBarAction {
   final IconData icon;
@@ -81,7 +101,17 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage> with WindowListener {
   final navigatorKey = GlobalKey<NavigatorState>();
 
+  final _routeStack = _RouteStackObserver();
+
+  /// Set while a pane tap switches pages, so that [_onPaneItemTap] can tell a
+  /// switch from tapping the page that is already selected.
+  bool _paneSelectionChanged = false;
+
   int index = 4;
+
+  /// The page shown under any pushed routes; kept apart from [index] because
+  /// the root route is built once and listens to it.
+  late final _currentPage = ValueNotifier<int>(index);
 
   int windowButtonKey = 0;
 
@@ -94,6 +124,9 @@ class _MainPageState extends State<MainPage> with WindowListener {
     listenMouseSideButtonToBack(navigatorKey);
     App.mainNavigatorKey = navigatorKey;
     index = appdata.settings["initialPage"] ?? 4;
+    if (pageBuilders.elementAtOrNull(index) == null) {
+      index = 4;
+    }
     super.initState();
   }
 
@@ -101,6 +134,7 @@ class _MainPageState extends State<MainPage> with WindowListener {
   void dispose() {
     StateController.remove<TitleBarController>();
     windowManager.removeListener(this);
+    _currentPage.dispose();
     super.dispose();
   }
 
@@ -127,6 +161,7 @@ class _MainPageState extends State<MainPage> with WindowListener {
       index: index,
       navigate: (index) {
         if (this.index == index) {
+          popToRoot();
           return;
         }
         setState(() {
@@ -136,6 +171,9 @@ class _MainPageState extends State<MainPage> with WindowListener {
       },
       windowButtonKey: windowButtonKey,
     );
+
+    // The pane and body below drop the top padding, so read it here.
+    final statusBarHeight = MediaQuery.paddingOf(context).top;
 
     if (!isLogin) {
       return NavigationView(
@@ -150,36 +188,54 @@ class _MainPageState extends State<MainPage> with WindowListener {
         key: navigationViewKey,
         titleBar: titleBar,
         pane: NavigationPane(
+          // The compact rail cannot be moved below the taller mobile app bar.
+          displayMode: !App.isMobile
+              ? PaneDisplayMode.auto
+              : MediaQuery.sizeOf(context).width >= 1008
+                  ? PaneDisplayMode.expanded
+                  : PaneDisplayMode.minimal,
           selected: index,
-          header: SizedBox(
-            height: MediaQuery.of(context).padding.top,
+          header: Builder(
+            builder: (paneContext) => SizedBox(
+              height: _underAppBar(
+                paneContext,
+                statusBarHeight,
+                NavigationView.dataOf(paneContext).displayMode ==
+                        PaneDisplayMode.minimal
+                    ? 44
+                    : 38,
+              ),
+            ),
           ),
           onChanged: (value) {
+            _paneSelectionChanged = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _paneSelectionChanged = false;
+            });
             setState(() {
               index = value;
             });
             navigate(value);
-            final viewState = navigationViewKey.currentState!;
-            if (viewState.isMinimalPaneOpen) {
-              viewState.toggleMinimalPane();
-            }
           },
           items: [
-            UserPane(),
+            UserPane(onTap: _onPaneItemTap),
             PaneItem(
               icon: const _PaneIcon(MdIcons.search),
               title: Text('Search'.tl),
               body: const SizedBox.shrink(),
+              onTap: _onPaneItemTap,
             ),
             PaneItem(
               icon: const _PaneIcon(MdIcons.downloading),
               title: Text('Downloading'.tl),
               body: const SizedBox.shrink(),
+              onTap: _onPaneItemTap,
             ),
             PaneItem(
-              icon: const _PaneIcon(MdIcons.download),
+              icon: const _PaneIcon(MdIcons.download_done),
               title: Text('Downloaded'.tl),
               body: const SizedBox.shrink(),
+              onTap: _onPaneItemTap,
             ),
             PaneItemSeparator(),
             _PaneHeaderItem('${"Illustrations".tl}/${"Manga".tl}'),
@@ -187,48 +243,57 @@ class _MainPageState extends State<MainPage> with WindowListener {
               icon: const _PaneIcon(MdIcons.explore_outlined),
               title: Text('Explore'.tl),
               body: const SizedBox.shrink(),
+              onTap: _onPaneItemTap,
             ),
             PaneItem(
-              icon: const _PaneIcon(MdIcons.bookmark_outline),
+              icon: const _PaneIcon(MdIcons.favorite_outline),
               title: Text('Bookmarks'.tl),
               body: const SizedBox.shrink(),
+              onTap: _onPaneItemTap,
             ),
             PaneItem(
-              icon: const _PaneIcon(MdIcons.interests_outlined),
+              icon: const _PaneIcon(MdIcons.people_outline),
               title: Text('Following'.tl),
               body: const SizedBox.shrink(),
+              onTap: _onPaneItemTap,
             ),
             PaneItem(
               icon: const _PaneIcon(MdIcons.history),
               title: Text('History'.tl),
               body: const SizedBox.shrink(),
+              onTap: _onPaneItemTap,
             ),
             PaneItem(
               icon: const _PaneIcon(MdIcons.leaderboard_outlined),
               title: Text('Ranking'.tl),
               body: const SizedBox.shrink(),
+              onTap: _onPaneItemTap,
             ),
             PaneItemSeparator(),
             _PaneHeaderItem("Novel".tl),
             PaneItem(
-              icon: const _PaneIcon(MdIcons.featured_play_list_outlined),
+              icon: const _PaneIcon(MdIcons.auto_stories_outlined),
               title: Text('Recommendation'.tl),
               body: const SizedBox.shrink(),
+              onTap: _onPaneItemTap,
             ),
             PaneItem(
-              icon: const _PaneIcon(MdIcons.collections_bookmark_outlined),
+              icon: const _PaneIcon(MdIcons.favorite_outline),
               title: Text('Bookmarks'.tl),
               body: const SizedBox.shrink(),
+              onTap: _onPaneItemTap,
             ),
             PaneItem(
-              icon: const _PaneIcon(MdIcons.interests_outlined),
+              icon: const _PaneIcon(MdIcons.people_outline),
               title: Text('Following'.tl),
               body: const SizedBox.shrink(),
+              onTap: _onPaneItemTap,
             ),
             PaneItem(
               icon: const _PaneIcon(MdIcons.leaderboard_outlined),
               title: Text('Ranking'.tl),
               body: const SizedBox.shrink(),
+              onTap: _onPaneItemTap,
             ),
             PaneItemSeparator(),
             PaneItemAction(
@@ -245,17 +310,35 @@ class _MainPageState extends State<MainPage> with WindowListener {
             ),
           ],
         ),
-        paneBodyBuilder: (pane, child) => MediaQuery.removePadding(
-          context: context,
-          removeTop: true,
-          child: Navigator(
-            key: navigatorKey,
-            onGenerateRoute: (settings) => AppPageRoute(
-              isRoot: true,
-              builder: (context) => pageBuilders.elementAtOrNull(index)!(),
+        paneBodyBuilder: (pane, child) => Builder(
+          builder: (context) => Padding(
+            padding: EdgeInsets.only(
+              top: _underAppBar(
+                context,
+                statusBarHeight,
+                NavigationView.dataOf(context).displayMode ==
+                        PaneDisplayMode.minimal
+                    ? 38
+                    : 32,
+              ),
+            ),
+            child: MediaQuery.removePadding(
+              context: context,
+              removeTop: true,
+              child: Navigator(
+                key: navigatorKey,
+                observers: [_routeStack],
+                onGenerateRoute: (settings) => AppPageRoute(
+                  isRoot: true,
+                  builder: (context) => _RootPages(
+                    current: _currentPage,
+                    builders: pageBuilders,
+                  ),
+                ),
+              ),
             ),
           ),
-        ).paddingTop(MediaQuery.of(context).padding.top),
+        ),
       ),
     );
   }
@@ -276,17 +359,134 @@ class _MainPageState extends State<MainPage> with WindowListener {
     () => const NovelRankingPage(),
   ];
 
+  /// Switches the sidebar page. Pages stay alive, so switching back does not
+  /// reload them; routes pushed on top are dropped without an exit animation.
   void navigate(int index) {
-    var page = pageBuilders.elementAtOrNull(index) ??
-        () => Center(
-              child: Text("Invalid Page: $index"),
-            );
-    navigatorKey.currentState!.pushAndRemoveUntil(
-      AppPageRoute(
-        builder: (context) => page(),
-        isRoot: true,
+    final navigator = navigatorKey.currentState;
+    if (navigator != null) {
+      _routeStack.removeAboveRoot(navigator);
+    }
+    _currentPage.value = index;
+  }
+
+  void popToRoot() {
+    navigatorKey.currentState?.popUntil((route) => route.isFirst);
+  }
+
+  void _onPaneItemTap() {
+    if (!_paneSelectionChanged) {
+      popToRoot();
+    }
+    _paneSelectionChanged = false;
+    final viewState = navigationViewKey.currentState!;
+    if (viewState.isMinimalPaneOpen) {
+      viewState.toggleMinimalPane();
+    }
+  }
+}
+
+class _RouteStackObserver extends NavigatorObserver {
+  final _routes = <Route<dynamic>>[];
+
+  void removeAboveRoot(NavigatorState navigator) {
+    for (final route in _routes.skip(1).toList().reversed) {
+      navigator.removeRoute(route);
+    }
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _routes.add(route);
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _routes.remove(route);
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _routes.remove(route);
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    final index = oldRoute == null ? -1 : _routes.indexOf(oldRoute);
+    if (newRoute == null) {
+      if (index >= 0) _routes.removeAt(index);
+    } else if (index >= 0) {
+      _routes[index] = newRoute;
+    } else {
+      _routes.add(newRoute);
+    }
+  }
+}
+
+/// Shows the selected sidebar page; pages opened before stay alive.
+class _RootPages extends StatefulWidget {
+  const _RootPages({required this.current, required this.builders});
+
+  final ValueListenable<int> current;
+
+  final List<Widget Function()> builders;
+
+  @override
+  State<_RootPages> createState() => _RootPagesState();
+}
+
+class _RootPagesState extends State<_RootPages>
+    with SingleTickerProviderStateMixin {
+  late int _index = widget.current.value;
+
+  // Starts completed: the root route already animates the first page in.
+  late final _transition = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 300),
+    value: 1,
+  );
+
+  CurvedAnimation? _curvedTransition;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.current.addListener(_onPageChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.current.removeListener(_onPageChanged);
+    _curvedTransition?.dispose();
+    _transition.dispose();
+    super.dispose();
+  }
+
+  void _onPageChanged() {
+    if (widget.current.value == _index) return;
+    setState(() {
+      _index = widget.current.value;
+    });
+    _transition.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _curvedTransition ??= CurvedAnimation(
+      parent: _transition,
+      curve: FluentTheme.of(context).animationCurve,
+    );
+    return EntrancePageTransition(
+      animation: _curvedTransition!,
+      child: LazyIndexedStack<int>(
+        current: _index,
+        builder: (context, index) {
+          final builder = widget.builders.elementAtOrNull(index);
+          if (builder == null) {
+            return Center(child: Text("Invalid Page: $index"));
+          }
+          return builder();
+        },
       ),
-      (route) => false,
     );
   }
 }
@@ -698,7 +898,8 @@ class _WindowButtonState extends State<WindowButton> {
 }
 
 class UserPane extends PaneItem {
-  UserPane() : super(icon: const SizedBox(), body: const SizedBox());
+  UserPane({super.onTap})
+      : super(icon: const SizedBox(), body: const SizedBox());
 
   @override
   Widget build({
@@ -741,6 +942,7 @@ class UserPane extends PaneItem {
                         image:
                             CachedImageProvider(appdata.account!.user.profile),
                         fit: BoxFit.fill,
+                        errorBuilder: _avatarPlaceholder,
                       ),
                     ),
                   ),
@@ -788,8 +990,9 @@ class UserPane extends PaneItem {
                 child: Image(
                   height: 30,
                   width: 30,
-                  image: NetworkImage(appdata.account!.user.profile),
+                  image: CachedImageProvider(appdata.account!.user.profile),
                   fit: BoxFit.fill,
+                  errorBuilder: _avatarPlaceholder,
                 ),
               ).paddingAll(4),
             );
@@ -832,7 +1035,10 @@ class UserPane extends PaneItem {
           ),
         );
       },
-      onPressed: onPressed,
+      onPressed: () {
+        onPressed?.call();
+        onTap?.call();
+      },
     );
 
     return Padding(
@@ -841,6 +1047,14 @@ class UserPane extends PaneItem {
       child: button,
     );
   }
+}
+
+Widget _avatarPlaceholder(
+    BuildContext context, Object error, StackTrace? stackTrace) {
+  return ColoredBox(
+    color: FluentTheme.of(context).resources.subtleFillColorSecondary,
+    child: const Center(child: Icon(MdIcons.person_outline)),
+  );
 }
 
 class _PaneHeaderItem extends PaneItemWidgetAdapter {

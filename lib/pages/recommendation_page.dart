@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:pixes/components/illust_widget.dart';
+import 'package:pixes/components/lazy_indexed_stack.dart';
 import 'package:pixes/components/loading.dart';
 import 'package:pixes/components/title_bar.dart';
 import 'package:pixes/foundation/app.dart';
@@ -23,7 +24,10 @@ class RecommendationPage extends StatefulWidget {
 
 class _RecommendationPageState extends State<RecommendationPage> {
   var type = 0;
-  final artworkPageKey = GlobalKey<_RecommendationArtworksPageState>();
+  final artworkPageKeys = [
+    GlobalKey<_RecommendationArtworksPageState>(),
+    GlobalKey<_RecommendationArtworksPageState>(),
+  ];
   final userPageKey = GlobalKey<_RecommendationUsersPageState>();
 
   @override
@@ -32,14 +36,17 @@ class _RecommendationPageState extends State<RecommendationPage> {
       children: [
         buildTab(),
         Expanded(
-          child: type != 2
-              ? _RecommendationArtworksPage(
-                  type,
-                  key: artworkPageKey,
-                )
-              : _RecommendationUsersPage(
-                  key: userPageKey,
-                ),
+          child: LazyIndexedStack<int>(
+            current: type,
+            builder: (context, type) => type != 2
+                ? _RecommendationArtworksPage(
+                    type,
+                    key: artworkPageKeys[type],
+                  )
+                : _RecommendationUsersPage(
+                    key: userPageKey,
+                  ),
+          ),
         )
       ],
     );
@@ -51,7 +58,7 @@ class _RecommendationPageState extends State<RecommendationPage> {
       title: "Explore".tl,
       onRefresh: () {
         if (type != 2) {
-          artworkPageKey.currentState?.refresh();
+          artworkPageKeys[type].currentState?.refresh();
         } else {
           userPageKey.currentState?.refresh();
         }
@@ -62,9 +69,10 @@ class _RecommendationPageState extends State<RecommendationPage> {
           if (type != 2) ...[
             SlideshowButton(
               source: 'Explore'.tl,
-              illusts: () => artworkPageKey.currentState?.loadedData ?? [],
+              illusts: () =>
+                  artworkPageKeys[type].currentState?.loadedData ?? [],
               nextUrl: () =>
-                  artworkPageKey.currentState?.nextUrl ??
+                  artworkPageKeys[type].currentState?.nextUrl ??
                   (type == 0
                       ? Network.recommendationUrl
                       : '/v1/manga/recommended?filter=for_android&include_ranking_illusts=true&include_privacy_policy=true'),

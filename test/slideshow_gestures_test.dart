@@ -53,6 +53,12 @@ void main() {
   setUp(() {
     appdata.settings['language'] = '简体中文';
     appdata.settings['blockTags'] = [];
+    // Gesture tests supply decoded originals and must not fetch thumbnails.
+    final thumbnails = appdata.settings['slideshowShowThumbnailWhileLoading'];
+    appdata.settings['slideshowShowThumbnailWhileLoading'] = false;
+    addTearDown(() {
+      appdata.settings['slideshowShowThumbnailWhileLoading'] = thumbnails;
+    });
   });
 
   Future<SlideshowController<ui.Image>> showViewer(WidgetTester tester,

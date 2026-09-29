@@ -53,6 +53,7 @@ class _NovelWidgetState extends State<NovelWidget> {
                   Text(
                     widget.novel.title,
                     maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.bold),
                   ),
@@ -71,6 +72,8 @@ class _NovelWidgetState extends State<NovelWidget> {
                   ),
                   Text(
                     widget.novel.author.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 12),
                   )
                 ],

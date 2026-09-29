@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart' hide TitleBar;
+import 'package:pixes/components/lazy_indexed_stack.dart';
 import 'package:pixes/components/loading.dart';
 import 'package:pixes/components/novel.dart';
 import 'package:pixes/components/title_bar.dart';
@@ -17,7 +18,7 @@ class NovelRankingPage extends StatefulWidget {
 
 class _NovelRankingPageState extends State<NovelRankingPage> {
   String type = "day";
-  final pageKey = GlobalKey<_OneRankingPageState>();
+  final pageKeys = <String, GlobalKey<_OneRankingPageState>>{};
 
   /// mode: day, day_male, day_female, week_rookie, week, week_ai
   static const types = {
@@ -36,9 +37,12 @@ class _NovelRankingPageState extends State<NovelRankingPage> {
         children: [
           buildHeader(),
           Expanded(
-            child: _OneRankingPage(
-              type,
-              key: pageKey,
+            child: LazyIndexedStack<String>(
+              current: type,
+              builder: (context, type) => _OneRankingPage(
+                type,
+                key: pageKeys.putIfAbsent(type, GlobalKey.new),
+              ),
             ),
           ),
         ],
@@ -49,7 +53,7 @@ class _NovelRankingPageState extends State<NovelRankingPage> {
   Widget buildHeader() {
     return TitleBar(
       title: "Ranking".tl,
-      onRefresh: () => pageKey.currentState?.refresh(),
+      onRefresh: () => pageKeys[type]?.currentState?.refresh(),
       action: DropDownButton(
         title: Text(types[type]!.tl),
         items: types.entries
@@ -78,15 +82,6 @@ class _OneRankingPage extends StatefulWidget {
 
 class _OneRankingPageState
     extends MultiPageLoadingState<_OneRankingPage, Novel> {
-  @override
-  void didUpdateWidget(covariant _OneRankingPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.type != widget.type) {
-      nextUrl = null;
-      reset();
-    }
-  }
-
   @override
   Future<void> refresh() {
     nextUrl = null;

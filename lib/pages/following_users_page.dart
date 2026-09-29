@@ -23,36 +23,44 @@ class _FollowingUsersPageState
   String type = "public";
 
   @override
+  Widget? buildFrame(BuildContext context, Widget child) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Text(
+              "Following".tl,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ).paddingVertical(12).paddingLeft(16),
+            const Spacer(),
+            if (widget.uid == appdata.account?.user.id)
+              SegmentedButton(
+                value: type,
+                options: [
+                  SegmentedButtonOption("public", "Public".tl),
+                  SegmentedButtonOption("private", "Private".tl),
+                ],
+                onPressed: (s) {
+                  if (s == type) return;
+                  type = s;
+                  nextUrl = null;
+                  reset();
+                },
+              ),
+            const SizedBox(
+              width: 16,
+            )
+          ],
+        ),
+        Expanded(child: child),
+      ],
+    );
+  }
+
+  @override
   Widget buildContent(BuildContext context, final List<UserPreview> data) {
     return CustomScrollView(
       slivers: [
-        SliverToBoxAdapter(
-          child: Row(
-            children: [
-              Text(
-                "Following".tl,
-                style:
-                    const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ).paddingVertical(12).paddingLeft(16),
-              const Spacer(),
-              if (widget.uid == appdata.account?.user.id)
-                SegmentedButton(
-                  value: type,
-                  options: [
-                    SegmentedButtonOption("public", "Public".tl),
-                    SegmentedButtonOption("private", "Private".tl),
-                  ],
-                  onPressed: (s) {
-                    type = s;
-                    reset();
-                  },
-                ),
-              const SizedBox(
-                width: 16,
-              )
-            ],
-          ),
-        ),
         SliverGridViewWithFixedItemHeight(
           delegate: SliverChildBuilderDelegate((context, index) {
             if (index == data.length - 1) {

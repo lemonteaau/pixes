@@ -292,9 +292,11 @@ class _IllustWidgetState extends State<IllustWidget> {
     } else {
       widget.illust.isBookmarked = !widget.illust.isBookmarked;
     }
-    setState(() {
-      isBookmarking = false;
-    });
+    if (mounted) {
+      setState(() {
+        isBookmarking = false;
+      });
+    }
   }
 
   Widget buildButton() {

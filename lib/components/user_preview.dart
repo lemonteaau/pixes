@@ -57,9 +57,11 @@ class _UserPreviewWidgetState extends State<UserPreviewWidget> {
     } else {
       widget.user.isFollowed = !widget.user.isFollowed;
     }
-    setState(() {
-      isFollowing = false;
-    });
+    if (mounted) {
+      setState(() {
+        isFollowing = false;
+      });
+    }
     UserInfoPage.followCallbacks[widget.user.id.toString()]
         ?.call(widget.user.isFollowed);
     IllustPage.updateFollow(widget.user.id.toString(), widget.user.isFollowed);
@@ -101,6 +103,7 @@ class _UserPreviewWidgetState extends State<UserPreviewWidget> {
                     const Spacer(),
                     Text(widget.user.name,
                         maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.bold)),
                     const SizedBox(
