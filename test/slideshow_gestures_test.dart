@@ -369,6 +369,33 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
   });
 
+  testWidgets('swiping while paused keeps the controls hidden',
+      (tester) async {
+    final controller = await showViewer(tester, playing: false);
+    double authorOpacity() => tester
+        .widget<AnimatedOpacity>(find
+            .ancestor(
+                of: find.text('@Artist'),
+                matching: find.byType(AnimatedOpacity))
+            .first)
+        .opacity;
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(authorOpacity(), 0);
+    final surface = find.byKey(const ValueKey('slideshow-gestures'));
+    await tester.drag(surface, const Offset(0, -400));
+    await settlePaging(tester);
+    expect(controller.current!.illust.id, 2);
+    expect(authorOpacity(), 0);
+    await tester.drag(surface, const Offset(-500, 0));
+    await settlePaging(tester);
+    expect(controller.current!.page, 1);
+    expect(authorOpacity(), 0);
+    expect(controller.playing, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 200));
+  });
+
   testWidgets('automatic playback animates both paging axes in A B1 B2 C order',
       (tester) async {
     final controller = await showViewer(tester);

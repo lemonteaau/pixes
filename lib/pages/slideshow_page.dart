@@ -374,8 +374,10 @@ class _SlideshowPageState extends State<SlideshowPage>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _releaseTouch();
-        // A manual swipe shows who made the new work, then gets out of the way.
-        _showControls();
+        // While playing, a manual swipe shows who made the new work, then
+        // gets out of the way. While paused the artwork stays on its own;
+        // controls that were already up just resume fading out.
+        if (_controller.playing || _controlsVisible) _showControls();
       });
     }
     return false;
