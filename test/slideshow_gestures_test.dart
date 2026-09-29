@@ -430,6 +430,15 @@ void main() {
         isTrue);
   });
 
+  test('browsing by hand lights every bar up to the current image', () {
+    const paused = SlideshowSegmentsPainter(
+        count: 4, current: 0, progress: 0, paused: true);
+    expect([for (var i = 0; i < 4; i++) paused.fillOf(i)], [1, 0, 0, 0]);
+    const playing = SlideshowSegmentsPainter(
+        count: 4, current: 2, progress: 0.25);
+    expect([for (var i = 0; i < 4; i++) playing.fillOf(i)], [1, 1, 0.25, 0]);
+  });
+
   testWidgets('while paused, the bars show briefly when changing images',
       (tester) async {
     final controller = await showViewer(tester, playing: false);

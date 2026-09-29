@@ -1571,6 +1571,15 @@ class SlideshowSegmentsPainter extends CustomPainter {
     ];
   }
 
+  /// How full the bar of image [index] is. Browsing by hand, every image up
+  /// to the one on screen is lit; while playing, the current one fills as it
+  /// plays.
+  double fillOf(int index) {
+    if (index < current) return 1;
+    if (index > current) return 0;
+    return paused ? 1 : progress.clamp(0.0, 1.0);
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     final bars = visibleBars;
@@ -1586,11 +1595,7 @@ class SlideshowSegmentsPainter extends CustomPainter {
       canvas.clipRRect(RRect.fromRectAndRadius(rect, radius));
       canvas.drawRect(
           rect, Paint()..color = Color.fromRGBO(255, 255, 255, 0.3 * opacity));
-      final amount = index < current
-          ? 1.0
-          : index == current
-              ? progress.clamp(0.0, 1.0)
-              : 0.0;
+      final amount = fillOf(index);
       if (amount > 0) {
         canvas.drawRect(
           Rect.fromLTWH(left, 0, barWidth * amount, size.height),
