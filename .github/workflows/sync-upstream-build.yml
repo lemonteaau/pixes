@@ -209,9 +209,208 @@ jobs:
           path: pixes-custom-ios-unsigned.ipa
           if-no-files-found: error
 
+  windows:
+    name: Build Windows ZIP
+    needs: sync
+    if: needs.sync.outputs.should_build == 'true'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout updated fork master
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.sync.outputs.commit_sha }}
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version-file: pubspec.yaml
+          architecture: x64
+          cache: true
+
+      - name: Build Windows app
+        shell: bash
+        env:
+          COMMIT_SHA: ${{ needs.sync.outputs.commit_sha }}
+          RELEASE_VERSION: ${{ needs.sync.outputs.release_version }}
+        run: |
+          flutter pub get
+          flutter build windows --release \
+            --dart-define=FORK_COMMIT="$COMMIT_SHA" \
+            --dart-define=FORK_VERSION="$RELEASE_VERSION"
+
+      # Upstream also ships an MSIX, but it needs their signing certificate;
+      # the portable ZIP runs as is.
+      - name: Package Windows ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "build/windows/x64/runner/Release/*" `
+            -DestinationPath "pixes-custom-windows-x64.zip" -Force
+
+      - name: Upload Windows ZIP
+        uses: actions/upload-artifact@v7
+        with:
+          name: pixes-custom-Windows-${{ github.run_number }}
+          path: pixes-custom-windows-x64.zip
+          if-no-files-found: error
+
+  linux:
+    name: Build Linux packages (${{ matrix.arch }})
+    needs: sync
+    if: needs.sync.outputs.should_build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            deb_arch: amd64
+            runner: ubuntu-latest
+            channel: stable
+          - arch: arm64
+            deb_arch: arm64
+            runner: ubuntu-22.04-arm
+            # Same as upstream's main.yml, which builds ARM64 from master.
+            channel: master
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout updated fork master
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.sync.outputs.commit_sha }}
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ matrix.channel }}
+          flutter-version-file: pubspec.yaml
+          cache: true
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ninja-build libgtk-3-dev webkit2gtk-4.1
+          dart pub global activate flutter_to_debian
+
+      - name: Build Linux app
+        shell: bash
+        env:
+          COMMIT_SHA: ${{ needs.sync.outputs.commit_sha }}
+          RELEASE_VERSION: ${{ needs.sync.outputs.release_version }}
+        run: |
+          flutter pub get
+          flutter build linux --release \
+            --dart-define=FORK_COMMIT="$COMMIT_SHA" \
+            --dart-define=FORK_VERSION="$RELEASE_VERSION"
+
+      # debian/build.py does the same substitutions, but builds without the
+      # fork's --dart-define values. The fork version lets apt upgrade in place.
+      - name: Package DEB
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.sync.outputs.release_version }}
+        run: |
+          sed -i \
+            -e "s/{{Version}}/$RELEASE_VERSION/" \
+            -e "s/{{Arch}}/${{ matrix.arch }}/" \
+            -e "s/{{Architecture}}/${{ matrix.deb_arch }}/" \
+            debian/debian.yaml
+          sed -i "s/{{Version}}/$RELEASE_VERSION/" debian/gui/pixes.desktop
+          "$HOME/.pub-cache/bin/flutter_to_debian"
+          deb="$(find build/linux -name '*.deb' | head -n 1)"
+          if [ -z "$deb" ]; then
+            echo "::error::flutter_to_debian produced no .deb"
+            exit 1
+          fi
+          mv "$deb" "pixes-custom-linux-${{ matrix.deb_arch }}.deb"
+
+      - name: Package Arch Linux
+        if: matrix.arch == 'x64'
+        shell: bash
+        run: |
+          dart run flutter_to_arch
+          pkg="$(find build/linux/arch -maxdepth 1 -name '*.pkg.tar.zst' | head -n 1)"
+          if [ -z "$pkg" ]; then
+            echo "::error::flutter_to_arch produced no package"
+            exit 1
+          fi
+          mv "$pkg" pixes-custom-linux-x86_64.pkg.tar.zst
+
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: pixes-custom-Linux-${{ matrix.arch }}-${{ github.run_number }}
+          path: |
+            pixes-custom-linux-*.deb
+            pixes-custom-linux-*.pkg.tar.zst
+          if-no-files-found: error
+
+  macos:
+    name: Build unsigned macOS DMG
+    needs: sync
+    if: needs.sync.outputs.should_build == 'true'
+    runs-on: macos-26
+    steps:
+      - name: Checkout updated fork master
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.sync.outputs.commit_sha }}
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version-file: pubspec.yaml
+          cache: true
+
+      - name: Select latest available Xcode
+        shell: bash
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then
+            XCODE=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          fi
+          echo "Selecting Xcode at: $XCODE"
+          sudo xcode-select --switch "$XCODE"
+          xcodebuild -version
+
+      # The project signs with upstream's Apple Development team, which this
+      # runner has no certificate for; sign ad hoc instead.
+      - name: Switch to ad-hoc signing
+        shell: bash
+        run: |
+          sed -i '' \
+            -e 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Apple Development";/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";/' \
+            -e 's/DEVELOPMENT_TEAM = [A-Z0-9]*;/DEVELOPMENT_TEAM = "";/' \
+            -e 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/' \
+            macos/Runner.xcodeproj/project.pbxproj
+
+      - name: Build unsigned DMG
+        shell: bash
+        env:
+          COMMIT_SHA: ${{ needs.sync.outputs.commit_sha }}
+          RELEASE_VERSION: ${{ needs.sync.outputs.release_version }}
+        run: |
+          flutter pub get
+          flutter build macos --release \
+            --dart-define=FORK_COMMIT="$COMMIT_SHA" \
+            --dart-define=FORK_VERSION="$RELEASE_VERSION"
+          mkdir -p dmg
+          cp -R build/macos/Build/Products/Release/pixes.app dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname pixes -srcfolder dmg -fs HFS+ -format UDZO \
+            pixes-custom-macos-unsigned.dmg
+
+      - name: Upload macOS DMG
+        uses: actions/upload-artifact@v7
+        with:
+          name: pixes-custom-macOS-${{ github.run_number }}
+          path: pixes-custom-macos-unsigned.dmg
+          if-no-files-found: error
+
   release:
     name: Publish custom release
-    needs: [sync, android, ios]
+    needs: [sync, android, ios, windows, linux, macos]
     runs-on: ubuntu-latest
     steps:
       - name: Download app artifacts
@@ -242,7 +441,9 @@ jobs:
             echo
             cat "$RUNNER_TEMP/upstream-release-notes.md"
             echo
-            echo "Android APK and unsigned iOS IPA builds passed."
+            echo "Android APK, unsigned iOS IPA, Windows ZIP, Linux DEB/Arch and unsigned macOS DMG builds passed."
+            echo
+            echo "The macOS app is not notarized: after copying it to Applications, run \`xattr -cr /Applications/pixes.app\` before the first launch."
           } > "$RUNNER_TEMP/release-notes.md"
 
           gh release create "$RELEASE_TAG" release-assets/* \
