@@ -5,6 +5,7 @@ import 'package:pixes/components/loading.dart';
 import 'package:pixes/components/title_bar.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/network/network.dart';
+import 'package:pixes/utils/block.dart';
 import 'package:pixes/utils/translation.dart';
 import 'package:pixes/pages/illust_viewer.dart';
 
@@ -42,6 +43,7 @@ class _RelatedIllustsPageState
 
   @override
   Widget buildContent(BuildContext context, final List<Illust> data) {
+    checkIllusts(data);
     return withRefresh(MasonryGridView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 8) +
             EdgeInsets.only(bottom: context.padding.bottom),

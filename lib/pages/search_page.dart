@@ -260,17 +260,22 @@ class _SearchSettingsState extends State<SearchSettings> {
               )),
           buildItem(
               title: "Include AI-generated works".tl,
-              child: ToggleSwitch(
-                checked: appdata.searchOptions.includeAiGeneratedWorks,
-                onChanged: (value) {
-                  if (appdata.searchOptions.includeAiGeneratedWorks != value) {
-                    setState(() {
-                      appdata.searchOptions.includeAiGeneratedWorks = value;
-                    });
-                    widget.onChanged?.call();
-                  }
-                },
-              )),
+              // Hiding AI works in settings wins over this option.
+              child: appdata.settings['blockAiWorks'] == true
+                  ? const ToggleSwitch(checked: false, onChanged: null)
+                  : ToggleSwitch(
+                      checked: appdata.searchOptions.includeAiGeneratedWorks,
+                      onChanged: (value) {
+                        if (appdata.searchOptions.includeAiGeneratedWorks !=
+                            value) {
+                          setState(() {
+                            appdata.searchOptions.includeAiGeneratedWorks =
+                                value;
+                          });
+                          widget.onChanged?.call();
+                        }
+                      },
+                    )),
           if (!widget.isNovel)
             Card(
                 padding: EdgeInsets.zero,
@@ -634,6 +639,7 @@ class _SearchNovelResultPageState
 
   @override
   Widget buildContent(BuildContext context, final List<Novel> data) {
+    checkNovels(data);
     return withRefresh(CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [

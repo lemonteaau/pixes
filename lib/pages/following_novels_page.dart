@@ -7,6 +7,7 @@ import 'package:pixes/components/segmented_button.dart';
 import 'package:pixes/components/title_bar.dart';
 import 'package:pixes/foundation/widget_utils.dart';
 import 'package:pixes/network/network.dart';
+import 'package:pixes/utils/block.dart';
 import 'package:pixes/utils/translation.dart';
 
 class FollowingNovelsPage extends StatefulWidget {
@@ -71,6 +72,7 @@ class _OneFollowingNovelsPageState
     extends MultiPageLoadingState<_OneFollowingNovelsPage, Novel> {
   @override
   Widget buildContent(BuildContext context, List<Novel> data) {
+    checkNovels(data);
     return withRefresh(GridViewWithFixedItemHeight(
       itemCount: data.length,
       itemHeight: 164,

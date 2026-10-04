@@ -350,6 +350,18 @@ class _SettingsPageState extends State<SettingsPage> {
                 },
               )),
           buildItem(
+              title: "Hide AI-generated works".tl,
+              subtitle:
+                  "Applies to illustrations, manga and novels in every list".tl,
+              action: ToggleSwitch(
+                  checked: appdata.settings['blockAiWorks'],
+                  onChanged: (value) {
+                    setState(() {
+                      appdata.settings['blockAiWorks'] = value;
+                    });
+                    appdata.writeSettings();
+                  })),
+          buildItem(
               title: "Shortcuts".tl,
               action: Button(
                 child: Text("Edit".tl).fixWidth(64),

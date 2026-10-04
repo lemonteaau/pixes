@@ -16,6 +16,14 @@ export 'res.dart';
 
 part 'novel.dart';
 
+/// Value of pixiv's `search_ai_type`: 1 leaves AI-generated works out of the
+/// results and 0 keeps them. Hiding AI works in settings overrides the search
+/// option.
+int _searchAiType(SearchOptions options) =>
+    options.includeAiGeneratedWorks && appdata.settings["blockAiWorks"] != true
+        ? 0
+        : 1;
+
 class Network {
   static const hashSalt =
       "28c1fdd170a5204386cb1313c7077b34f83e4aaf4aa829ce78c231e05b0bae2c";
@@ -342,7 +350,7 @@ class Network {
     final encodedKeyword = Uri.encodeComponent(keyword +
         options.favoriteNumber.toParam() +
         options.ageLimit.toParam());
-    final aiType = options.includeAiGeneratedWorks ? 0 : 1;
+    final aiType = _searchAiType(options);
     if (options.sort == SearchSort.popular && !options.sort.isPremium) {
       path =
           "/v1/search/popular-preview/illust?filter=for_android&include_translated_tag_results=true&merge_plain_keyword_results=true&word=$encodedKeyword&search_target=${options.matchType.toParam()}&search_ai_type=$aiType";

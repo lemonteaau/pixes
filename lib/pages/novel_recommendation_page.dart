@@ -5,6 +5,7 @@ import 'package:pixes/components/novel.dart';
 import 'package:pixes/components/title_bar.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/network/network.dart';
+import 'package:pixes/utils/block.dart';
 import 'package:pixes/utils/translation.dart';
 
 class NovelRecommendationPage extends StatefulWidget {
@@ -34,6 +35,7 @@ class _NovelRecommendationPageState
 
   @override
   Widget buildContent(BuildContext context, List<Novel> data) {
+    checkNovels(data);
     return withRefresh(GridViewWithFixedItemHeight(
       itemCount: data.length,
       itemHeight: 164,

@@ -1,5 +1,7 @@
 {
     "zh_CN": {
+        "Hide AI-generated works": "隐藏AI生成作品",
+        "Applies to illustrations, manga and novels in every list": "对所有列表中的插画、漫画和小说生效",
         "Cache": "缓存",
         "Image cache": "图片缓存",
         "Calculating...": "计算中...",
@@ -246,6 +248,8 @@
         "No results found": "未找到结果"
     },
     "zh_TW": {
+        "Hide AI-generated works": "隱藏AI生成作品",
+        "Applies to illustrations, manga and novels in every list": "對所有列表中的插畫、漫畫和小說生效",
         "Cache": "快取",
         "Image cache": "圖片快取",
         "Calculating...": "計算中...",
@@ -492,6 +496,8 @@
         "No results found": "未找到結果"
     },
     "ko_KR": {
+        "Hide AI-generated works": "AI 생성 작품 숨기기",
+        "Applies to illustrations, manga and novels in every list": "모든 목록의 일러스트, 만화, 소설에 적용됩니다",
         "Cache": "캐시",
         "Image cache": "이미지 캐시",
         "Calculating...": "계산 중...",

@@ -16,7 +16,7 @@ extension NovelExt on Network {
   }
 
   Future<Res<List<Novel>>> searchNovels(String keyword, SearchOptions options) {
-    final aiType = options.includeAiGeneratedWorks ? 1 : 0;
+    final aiType = _searchAiType(options);
     var url = "/v1/search/novel?"
         "include_translated_tag_results=true&"
         "merge_plain_keyword_results=true&"

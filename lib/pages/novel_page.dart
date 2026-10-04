@@ -19,6 +19,7 @@ import 'package:pixes/pages/novel_reading_page.dart';
 import 'package:pixes/pages/search_page.dart';
 import 'package:pixes/pages/user_info_page.dart';
 import 'package:pixes/utils/app_links.dart';
+import 'package:pixes/utils/block.dart';
 import 'package:pixes/utils/translation.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
@@ -779,6 +780,7 @@ class __RelatedNovelsPageState
     extends LoadingState<_RelatedNovelsPage, List<Novel>> {
   @override
   Widget buildContent(BuildContext context, List<Novel> data) {
+    checkNovels(data);
     return Column(
       children: [
         TitleBar(title: "Related Novels".tl),

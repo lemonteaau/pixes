@@ -32,6 +32,7 @@ class _Appdata {
     "slideshowWaitForImageLoad": true,
     "slideshowShowThumbnailWhileLoading": true,
     "blockTags": [],
+    "blockAiWorks": false,
     "shortcuts": <int>[
       LogicalKeyboardKey.arrowDown.keyId,
       LogicalKeyboardKey.arrowUp.keyId,

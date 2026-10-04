@@ -484,6 +484,7 @@ class _UserNovelsState extends MultiPageLoadingState<_UserNovels, Novel> {
 
   @override
   Widget buildContent(BuildContext context, List<Novel> data) {
+    checkNovels(data);
     return SliverGridViewWithFixedItemHeight(
       itemHeight: 164,
       minCrossAxisExtent: 400,

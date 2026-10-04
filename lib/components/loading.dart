@@ -157,6 +157,15 @@ abstract class MultiPageLoadingState<T extends StatefulWidget, S extends Object>
 
   bool _refreshFromIndicator = false;
 
+  /// Whether the latest page came back with items, which [buildContent] may
+  /// still filter out entirely.
+  bool _lastPageHadItems = false;
+
+  /// Pages loaded in a row without leaving anything to show.
+  int _emptyPagesInARow = 0;
+
+  static const _maxEmptyPagesInARow = 10;
+
   final _refreshIndicatorKey =
       GlobalKey<material.RefreshIndicatorState>();
 
@@ -179,6 +188,7 @@ abstract class MultiPageLoadingState<T extends StatefulWidget, S extends Object>
       _isLoading = false;
       if(value.success) {
         _page++;
+        _lastPageHadItems = value.data.isNotEmpty;
         setState(() {
           _data!.addAll(value.data);
         });
@@ -209,6 +219,8 @@ abstract class MultiPageLoadingState<T extends StatefulWidget, S extends Object>
       _error = null;
       _page = 1;
     });
+    _lastPageHadItems = false;
+    _emptyPagesInARow = 0;
     firstLoad();
   }
 
@@ -259,6 +271,7 @@ abstract class MultiPageLoadingState<T extends StatefulWidget, S extends Object>
       if (!mounted || generation != _generation) return;
       if(value.success) {
         _page++;
+        _lastPageHadItems = value.data.isNotEmpty;
         setState(() {
           _isFirstLoading = false;
           _isLoading = false;
@@ -324,8 +337,27 @@ abstract class MultiPageLoadingState<T extends StatefulWidget, S extends Object>
       child = buildError(context, _error!);
     } else {
       child = buildContent(context, _data!);
+      _loadMoreIfAllFiltered();
     }
 
     return buildFrame(context, child) ?? child;
+  }
+
+  /// Lists only ask for the next page while building their last item, so a list
+  /// whose loaded pages were all filtered out by [buildContent] would stop
+  /// there. Keep loading until something is left to show.
+  void _loadMoreIfAllFiltered() {
+    if (_data!.isNotEmpty) {
+      _emptyPagesInARow = 0;
+      return;
+    }
+    if (!_lastPageHadItems || _emptyPagesInARow >= _maxEmptyPagesInARow) {
+      return;
+    }
+    _lastPageHadItems = false;
+    _emptyPagesInARow++;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) nextPage();
+    });
   }
 }
