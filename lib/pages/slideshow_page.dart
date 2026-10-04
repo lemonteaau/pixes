@@ -187,6 +187,17 @@ class _SlideshowPageState extends State<SlideshowPage>
     }
   }
 
+  /// The slide on screen. While the next work loads, the controller's
+  /// current slide is still the one before it, so whatever the viewer does
+  /// to "this work" goes to the target instead.
+  Slide? get _shown {
+    final target = _controller.targetIndex;
+    if (target >= 0 && target < _controller.slideCount) {
+      return _controller.slideAt(target);
+    }
+    return _controller.current;
+  }
+
   /// The first slide of the work with [id], if it's in the feed.
   int? _firstSlideOf(int? id) {
     if (id == null) return null;
@@ -455,7 +466,7 @@ class _SlideshowPageState extends State<SlideshowPage>
     if (position != null) {
       setState(() => _bursts.add(_Burst(_burstId++, position)));
     }
-    final illust = _controller.current?.illust;
+    final illust = _shown?.illust;
     // Like a short video: double tap only ever likes, it never un-likes.
     if (illust != null && !illust.isBookmarked) _setBookmarked(illust, true);
     _releaseTouch();
@@ -518,7 +529,7 @@ class _SlideshowPageState extends State<SlideshowPage>
   /// Shows the current image in the zoomable viewer, from the downloaded
   /// file when there is one.
   Future<void> _openZoom() async {
-    final slide = _controller.current;
+    final slide = _shown;
     if (slide == null) return;
     final illust = slide.illust;
     final urls = [
@@ -556,7 +567,7 @@ class _SlideshowPageState extends State<SlideshowPage>
   /// settings.
   Map<ShortcutActivator, VoidCallback> _shortcuts() {
     void withIllust(void Function(Illust illust) action) {
-      final illust = _controller.current?.illust;
+      final illust = _shown?.illust;
       if (illust != null) action(illust);
     }
 
@@ -627,7 +638,7 @@ class _SlideshowPageState extends State<SlideshowPage>
       transitionDuration: const Duration(milliseconds: 240),
       pageBuilder: (context, _, __) => _MoreSheet(
         controller: _controller,
-        illust: _controller.current?.illust,
+        illust: _shown?.illust,
         onPrivateBookmark: (illust) =>
             _setBookmarked(illust, true, restrict: 'private'),
         onDownload: _download,
@@ -819,7 +830,7 @@ class _SlideshowPageState extends State<SlideshowPage>
   Widget _draggable(Widget child) =>
       App.isDesktop ? DragToMoveArea(child: child) : child;
 
-  Widget _info(Slide slide, List<int> pages) {
+  Widget _info(Slide slide) {
     final illust = slide.illust;
     final tags = illust.tags
         .take(4)
@@ -1016,9 +1027,7 @@ class _SlideshowPageState extends State<SlideshowPage>
   @override
   Widget build(BuildContext context) {
     final slide = _controller.current;
-    final work =
-        slide == null ? null : _controller.workOf(_controller.currentIndex);
-    final pages = work == null ? <int>[] : _controller.pagesOf(work);
+    final shown = _shown;
     final status = _message ??
         (_controller.ended ? 'Slideshow finished'.tl : _controller.error?.tl);
     return FluentTheme(
@@ -1108,8 +1117,8 @@ class _SlideshowPageState extends State<SlideshowPage>
                         ),
                       ),
                     _topBar(),
-                    if (slide != null) _info(slide, pages),
-                    if (slide != null) _actions(slide.illust),
+                    if (shown != null) _info(shown),
+                    if (shown != null) _actions(shown.illust),
                     _progress(),
                     if (status != null)
                       Positioned(

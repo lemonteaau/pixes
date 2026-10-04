@@ -26,14 +26,6 @@ class ImagePage extends StatefulWidget {
 
   /// Completes when the viewer is closed.
   static Future<void> show(List<String> urls, {int initialPage = 0}) async {
-    // Temporary solution for issue: https://github.com/flutter/flutter/issues/152323
-    // Patch 1 begin
-    if (App.isAndroid) {
-      App.mainNavigatorKey?.currentState?.push(AppPageRoute(
-        builder: (context) => const SizedBox(),
-      ));
-    }
-    // Patch 1 End
     await App.rootNavigatorKey.currentState?.push(AppPageRoute(
       builder: (context) => ImagePage(urls, initialPage: initialPage),
     ));
@@ -166,16 +158,6 @@ class _ImagePageState extends State<ImagePage> with WindowListener {
             ));
   }
 
-  void closePage() {
-    context.pop();
-    // Temporary solution for issue: https://github.com/flutter/flutter/issues/152323
-    // Patch 2 begin
-    if (App.isAndroid) {
-      App.mainNavigatorKey?.currentState?.pop();
-    }
-    // Patch 2 end
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -233,7 +215,7 @@ class _ImagePageState extends State<ImagePage> with WindowListener {
                         ),
                         IconButton(
                             icon: const Icon(FluentIcons.back).paddingAll(2),
-                            onPressed: closePage),
+                            onPressed: () => context.pop()),
                         const Expanded(
                           child: DragToMoveArea(
                             child: SizedBox.expand(),
