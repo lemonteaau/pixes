@@ -25,6 +25,16 @@ class _ImageLoad implements SlideLoad<ui.Image> {
   }
 }
 
+/// An original that arrives when the test completes [completer].
+class _PendingLoad implements SlideLoad<ui.Image> {
+  _PendingLoad(this.completer);
+  final Completer<ui.Image> completer;
+  @override
+  Future<ui.Image> get ready => completer.future;
+  @override
+  void dispose() {}
+}
+
 /// The image the bars along the bottom mark as current, and how many there
 /// are.
 (int, int) shownPage(WidgetTester tester) {
@@ -265,6 +275,53 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 200));
   });
+
+  testWidgets('liking a work whose original is still loading likes that work',
+      (tester) async {
+    final second = Completer<ui.Image>();
+    final liked = <int>[];
+    final controller = SlideshowController<ui.Image>(
+      initialIllusts: [artwork(1), artwork(2), artwork(3)],
+      nextUrl: null,
+      loadPage: (_) async => const Res([]),
+      loadImage: (url) =>
+          url.endsWith('/2-0.png') ? _PendingLoad(second) : _ImageLoad(source),
+      now: tester.binding.clock.now,
+    )..playing = false;
+    await tester.pumpWidget(FluentApp(
+      home: SlideshowPage(
+        illusts: const [],
+        nextUrl: null,
+        source: '推荐',
+        controller: controller,
+        setBookmark: (illust, _) async {
+          liked.add(illust.id);
+          return const Res(true);
+        },
+      ),
+    ));
+    await tester.pump();
+    await tester.pump();
+    final first = controller.current!.illust;
+    await tester.drag(find.byKey(const ValueKey('slideshow-gestures')),
+        const Offset(0, -400));
+    await settlePaging(tester);
+    expect(controller.busy, isTrue);
+    expect(controller.current!.illust.id, 1);
+    expect(find.text('Artwork 2'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('slideshow-bookmark')));
+    await tester.pump();
+    expect(liked, [2]);
+    expect(first.isBookmarked, isFalse);
+    second.complete(source.clone());
+    await tester.pump();
+    await tester.pump();
+    expect(controller.current!.illust.id, 2);
+    expect(controller.current!.illust.isBookmarked, isTrue);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 200));
+  });
+
   testWidgets('controls fit a phone in landscape', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(640, 320);
