@@ -15,12 +15,14 @@ import 'package:pixes/foundation/app.dart';
 import 'package:pixes/foundation/image_provider.dart';
 import 'package:pixes/foundation/log.dart';
 import 'package:pixes/foundation/novel_progress.dart';
+import 'package:pixes/foundation/novel_replace_store.dart';
 import 'package:pixes/network/network.dart';
 import 'package:pixes/network/translator.dart';
 import 'package:pixes/pages/image_page.dart';
 import 'package:pixes/pages/main_page.dart';
 import 'package:pixes/utils/app_links.dart';
 import 'package:pixes/utils/novel_markup.dart';
+import 'package:pixes/utils/novel_replace.dart';
 import 'package:pixes/utils/screen_awake.dart';
 import 'package:pixes/utils/translation.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -49,13 +51,18 @@ typedef _ItemPosition = ({int index, double offset, double height});
 typedef _ItemLayout = ({int index, double top, double height});
 
 class NovelReadingPage extends StatefulWidget {
-  const NovelReadingPage(this.novel, {this.resume = false, super.key});
+  const NovelReadingPage(this.novel,
+      {this.resume = false, this.initialBlock, super.key});
 
   final Novel novel;
 
   /// Whether to go straight back to where the user stopped reading, instead
   /// of offering to.
   final bool resume;
+
+  /// The index of the block of text to open the novel at, instead of where
+  /// the user stopped reading.
+  final int? initialBlock;
 
   @override
   State<NovelReadingPage> createState() => _NovelReadingPageState();
@@ -135,6 +142,8 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
 
   String? _parsedSource;
 
+  NovelTextReplacer? _parsedReplacer;
+
   List<NovelBlock> _blocks = const [];
 
   /// The total weight of the blocks before each block.
@@ -167,6 +176,8 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
 
   late bool _resumeOnOpen;
 
+  int? _initialBlock;
+
   NovelReadingProgress? _resumePrompt;
 
   Timer? _resumePromptTimer;
@@ -175,8 +186,10 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
   void initState() {
     novel = widget.novel;
     _resumeOnOpen = widget.resume;
+    _initialBlock = widget.initialBlock;
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    NovelReplaceStore.instance.addListener(_handleReplacementsChanged);
     _scrollController = ScrollController(keepScrollOffset: false);
     _autoScrollTicker = createTicker(_handleAutoScrollTick);
     autoScrollAction = _createAutoScrollAction();
@@ -245,6 +258,7 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
   void dispose() {
     _saveProgress();
     WidgetsBinding.instance.removeObserver(this);
+    NovelReplaceStore.instance.removeListener(_handleReplacementsChanged);
     _resumePromptTimer?.cancel();
     _scrollGeneration++;
     _stopAutoScroll(updateAction: false);
@@ -262,6 +276,10 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
       }
     });
     super.dispose();
+  }
+
+  void _handleReplacementsChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -454,22 +472,12 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
     setState(() {
       isLoadingSeries = true;
     });
-    final all = <Novel>[];
-    String? nextUrl;
-    // Series are paginated; load every page. The cap guards against an
-    // unexpected pagination loop.
-    for (var i = 0; i < 50; i++) {
-      var res = await Network().getNovelSeries(seriesId.toString(), nextUrl);
-      if (res.error) break;
-      all.addAll(res.data);
-      nextUrl = res.subData;
-      if (nextUrl == null || nextUrl.isEmpty) break;
-    }
+    final res = await Network().getAllNovelSeries(seriesId.toString());
     if (!mounted) return;
     setState(() {
       isLoadingSeries = false;
-      if (all.isNotEmpty) {
-        seriesNovels = all;
+      if (res.success && res.data.isNotEmpty) {
+        seriesNovels = res.data;
       }
     });
   }
@@ -543,9 +551,15 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
   }
 
   void _ensureParsed(String source) {
-    if (identical(source, _parsedSource)) return;
+    final replacer =
+        NovelReplaceStore.instance.replacer(NovelReplaceStore.bookOf(novel));
+    if (identical(source, _parsedSource) &&
+        identical(replacer, _parsedReplacer)) {
+      return;
+    }
     _parsedSource = source;
-    _blocks = parseNovelContent(source);
+    _parsedReplacer = replacer;
+    _blocks = replaceNovelBlocks(parseNovelContent(source), replacer);
     var total = 0;
     _weightBefore = [
       for (final block in _blocks) (total += block.weight) - block.weight,
@@ -737,6 +751,12 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
     _updateReadingPosition();
     final resume = _resumeOnOpen;
     _resumeOnOpen = false;
+    final initialBlock = _initialBlock;
+    _initialBlock = null;
+    if (initialBlock != null) {
+      _scrollToItem(initialBlock + 1, 0);
+      return;
+    }
     final saved = NovelProgressStore.instance.get(novel.id);
     if (saved == null ||
         saved.isFinished ||

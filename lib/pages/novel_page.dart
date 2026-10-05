@@ -12,10 +12,12 @@ import 'package:pixes/foundation/app.dart';
 import 'package:intl/intl.dart';
 import 'package:pixes/foundation/image_provider.dart';
 import 'package:pixes/foundation/novel_progress.dart';
+import 'package:pixes/foundation/novel_replace_store.dart';
 import 'package:pixes/foundation/optimistic_toggle.dart';
 import 'package:pixes/network/network.dart';
 import 'package:pixes/pages/comments_page.dart';
 import 'package:pixes/pages/novel_reading_page.dart';
+import 'package:pixes/pages/novel_replace_page.dart';
 import 'package:pixes/pages/search_page.dart';
 import 'package:pixes/pages/user_info_page.dart';
 import 'package:pixes/utils/app_links.dart';
@@ -574,22 +576,60 @@ class _NovelPageState extends State<NovelPage> {
             ),
           ),
           const SizedBox(height: 12),
-          Button(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(MdIcons.auto_awesome_outlined, size: 18),
-                  const SizedBox(width: 12),
-                  Text("Related".tl)
-                ],
-              ).fixHeight(32),
-              onPressed: () {
-                context
-                    .to(() => _RelatedNovelsPage(widget.novel.id.toString()));
-              }),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Button(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(MdIcons.auto_awesome_outlined, size: 18),
+                      const SizedBox(width: 12),
+                      Text("Related".tl)
+                    ],
+                  ).fixHeight(32),
+                  onPressed: () {
+                    context.to(
+                        () => _RelatedNovelsPage(widget.novel.id.toString()));
+                  }),
+              buildReplaceButton(),
+            ],
+          ),
         ],
       ),
     ).paddingTop(12);
+  }
+
+  /// Opens the word replacements of the book this novel belongs to.
+  Widget buildReplaceButton() {
+    final count = NovelReplaceStore.instance
+        .rules(NovelReplaceStore.bookOf(widget.novel))
+        .length;
+    return Button(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(MdIcons.find_replace, size: 18),
+            const SizedBox(width: 12),
+            Text("Word Replacement".tl),
+            if (count > 0) ...[
+              const SizedBox(width: 6),
+              Text(
+                "$count",
+                style: TextStyle(
+                  fontSize: 12,
+                  color: ColorScheme.of(context).outline,
+                ),
+              ),
+            ],
+          ],
+        ).fixHeight(32),
+        onPressed: () {
+          context.to(() => NovelReplacePage(widget.novel)).then((_) {
+            if (mounted) setState(() {});
+          });
+        });
   }
 
   Iterable<TextSpan> buildDescriptionText() sync* {

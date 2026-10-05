@@ -121,6 +121,25 @@ extension NovelExt on Network {
         subData: res.data["next_url"]);
   }
 
+  /// Every chapter of the series [id], in reading order. If a later page
+  /// fails, the chapters loaded until then are returned.
+  Future<Res<List<Novel>>> getAllNovelSeries(String id) async {
+    final all = <Novel>[];
+    String? nextUrl;
+    // The cap guards against an unexpected pagination loop.
+    for (var i = 0; i < 50; i++) {
+      final res = await getNovelSeries(id, nextUrl);
+      if (res.error) {
+        if (all.isEmpty) return res;
+        break;
+      }
+      all.addAll(res.data);
+      nextUrl = res.subData;
+      if (nextUrl == null || nextUrl.isEmpty) break;
+    }
+    return Res(all);
+  }
+
   Future<Res<List<Comment>>> getNovelComments(String id,
       [String? nextUrl]) async {
     var res = await apiGet(nextUrl ?? "/v1/novel/comments?novel_id=$id");
