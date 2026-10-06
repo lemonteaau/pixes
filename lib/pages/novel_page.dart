@@ -11,11 +11,14 @@ import 'package:pixes/components/title_bar.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:intl/intl.dart';
 import 'package:pixes/foundation/image_provider.dart';
+import 'package:pixes/foundation/novel_books.dart';
+import 'package:pixes/foundation/novel_history.dart';
 import 'package:pixes/foundation/novel_progress.dart';
 import 'package:pixes/foundation/novel_replace_store.dart';
 import 'package:pixes/foundation/optimistic_toggle.dart';
 import 'package:pixes/network/network.dart';
 import 'package:pixes/pages/comments_page.dart';
+import 'package:pixes/pages/novel_book_page.dart';
 import 'package:pixes/pages/novel_reading_page.dart';
 import 'package:pixes/pages/novel_replace_page.dart';
 import 'package:pixes/pages/search_page.dart';
@@ -40,7 +43,30 @@ class _NovelPageState extends State<NovelPage> {
   final scrollController = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    NovelHistoryStore.instance.add(widget.novel);
+    NovelBookStore.instance.addListener(_update);
+  }
+
+  @override
+  void dispose() {
+    NovelBookStore.instance.removeListener(_update);
+    scrollController.dispose();
+    super.dispose();
+  }
+
+  void _update() {
+    if (mounted) setState(() {});
+  }
+
+  /// The book the user put this novel in.
+  NovelCustomBook? get customBook =>
+      NovelBookStore.instance.bookOf(widget.novel.id);
+
+  @override
   Widget build(BuildContext context) {
+    final custom = customBook;
     return Scrollbar(
         controller: scrollController,
         child: ScrollConfiguration(
@@ -57,6 +83,7 @@ class _NovelPageState extends State<NovelPage> {
               SliverToBoxAdapter(
                 child: buildDescription(),
               ),
+              if (custom != null) _NovelBookChapters(custom),
               if (widget.novel.seriesId != null)
                 NovelSeriesWidget(
                     widget.novel.seriesId!, widget.novel.seriesTitle!),
@@ -69,7 +96,9 @@ class _NovelPageState extends State<NovelPage> {
   }
 
   Widget buildTop() {
-    final badges = buildNovelBadges(context, widget.novel, showSeries: false);
+    final badges = buildNovelBadges(context, widget.novel,
+        showSeries: false, showBook: false);
+    final custom = customBook;
     return Card(
         child: SizedBox(
       height: 144,
@@ -130,7 +159,22 @@ class _NovelPageState extends State<NovelPage> {
                       color: ColorScheme.of(context).primary,
                       fontSize: 12,
                     ),
-                  ).paddingVertical(4)
+                  ).paddingVertical(4),
+                if (custom != null)
+                  MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      onTap: () => openReader(NovelBookPage(custom.id)),
+                      child: Text(
+                        overflow: TextOverflow.ellipsis,
+                        "${"Book".tl}: ${custom.title}",
+                        style: TextStyle(
+                          color: ColorScheme.of(context).primary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ).paddingVertical(4),
               ],
             ),
           ),
@@ -305,32 +349,50 @@ class _NovelPageState extends State<NovelPage> {
     });
   }
 
-  /// Offers to go back to the chapter of the series that was read last, if
-  /// it's not this one.
+  /// Offers to go back to the chapter of the book or series that was read
+  /// last, if it's not this one.
   Widget buildSeriesContinue() {
+    final int novelId;
+    final int? chapter;
+    final String title;
+    final Widget Function() reader;
+    final custom = customBook;
     final seriesId = widget.novel.seriesId;
-    if (seriesId == null) return const SizedBox.shrink();
-    final last = NovelProgressStore.instance.getSeries(seriesId);
-    if (last == null || last.novelId == widget.novel.id) {
+    if (custom != null) {
+      final lastRead = custom.lastReadId;
+      final index = lastRead == null ? -1 : custom.indexOf(lastRead);
+      if (index < 0) return const SizedBox.shrink();
+      final last = custom.chapters[index];
+      novelId = last.id;
+      chapter = index + 1;
+      title = last.title;
+      reader = () => NovelReadingPage(last, resume: true);
+    } else if (seriesId != null) {
+      final last = NovelProgressStore.instance.getSeries(seriesId);
+      if (last == null) return const SizedBox.shrink();
+      novelId = last.novelId;
+      chapter = last.chapter;
+      title = last.title;
+      reader =
+          () => NovelReadingPageWithId(last.novelId.toString(), resume: true);
+    } else {
       return const SizedBox.shrink();
     }
-    final label = last.chapter != null
-        ? "Continue chapter @n".tl.replaceAll("@n", "${last.chapter}")
+    if (novelId == widget.novel.id) return const SizedBox.shrink();
+    final label = chapter != null
+        ? "Continue chapter @n".tl.replaceAll("@n", "$chapter")
         : "Continue Reading".tl;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 560),
       child: Button(
-        onPressed: () {
-          openReader(NovelReadingPageWithId(last.novelId.toString(),
-              resume: true));
-        },
+        onPressed: () => openReader(reader()),
         child: Row(
           children: [
             const Icon(MdIcons.history, size: 18),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                "$label · ${last.title}",
+                "$label · $title",
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -694,6 +756,75 @@ class _NovelPageState extends State<NovelPage> {
         style = const TextStyle();
       }
     }
+  }
+}
+
+/// The chapters of the book the user put a novel in.
+class _NovelBookChapters extends StatelessWidget {
+  const _NovelBookChapters(this.book);
+
+  final NovelCustomBook book;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedSliver(
+      decoration: BoxDecoration(
+          color: FluentTheme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: ColorScheme.of(context).outlineVariant.toOpacity(0.6),
+            width: 0.5,
+          )),
+      sliver: SliverMainAxisGroup(slivers: [
+        SliverToBoxAdapter(
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(book.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    )),
+              ),
+              const SizedBox(width: 8),
+              Button(
+                onPressed: () => context.to(() => NovelBookPage(book.id)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text("@n chapters"
+                        .tl
+                        .replaceAll("@n", "${book.chapters.length}")),
+                    const SizedBox(width: 4),
+                    const Icon(MdIcons.chevron_right, size: 16),
+                  ],
+                ),
+              ),
+            ],
+          ).paddingTop(16).paddingLeft(12).paddingRight(12),
+        ),
+        const SliverPadding(padding: EdgeInsets.only(top: 8)),
+        SliverGridViewWithFixedItemHeight(
+          itemHeight: 164,
+          minCrossAxisExtent: 400,
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              final chapter = book.chapters[index];
+              return NovelWidget(
+                chapter,
+                // The chapters are saved as they were when added, so load
+                // them again for their page.
+                onTap: () =>
+                    context.to(() => NovelPageWithId(chapter.id.toString())),
+              );
+            },
+            childCount: book.chapters.length,
+          ),
+        ).sliverPadding(const EdgeInsets.symmetric(horizontal: 8)),
+      ]),
+    ).sliverPadding(const EdgeInsets.only(top: 16));
   }
 }
 
