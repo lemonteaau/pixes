@@ -14,6 +14,8 @@ import 'package:pixes/components/title_bar.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/foundation/image_provider.dart';
 import 'package:pixes/foundation/log.dart';
+import 'package:pixes/foundation/novel_books.dart';
+import 'package:pixes/foundation/novel_history.dart';
 import 'package:pixes/foundation/novel_progress.dart';
 import 'package:pixes/foundation/novel_replace_store.dart';
 import 'package:pixes/network/network.dart';
@@ -129,12 +131,22 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
   String? translatedContent;
 
   /// The novel currently shown. Changes when navigating between the
-  /// chapters (episodes) of a series.
+  /// chapters (episodes) of a series or book.
   late Novel novel;
 
   /// All episodes of the series this novel belongs to, in reading order.
   /// Null until loaded, or if the novel does not belong to a series.
   List<Novel>? seriesNovels;
+
+  /// The book the user put the novel in. Its chapters are read in its order
+  /// instead of the series'.
+  NovelCustomBook? get customBook => NovelBookStore.instance.bookOf(novel.id);
+
+  /// The chapters of the book or series the novel is part of, in reading
+  /// order. Null until the series is loaded, or if it's part of neither.
+  List<Novel>? get chapters => customBook?.chapters ?? seriesNovels;
+
+  bool get hasChapters => customBook != null || novel.seriesId != null;
 
   bool isLoadingSeries = false;
 
@@ -189,11 +201,13 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
     _initialBlock = widget.initialBlock;
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    NovelReplaceStore.instance.addListener(_handleReplacementsChanged);
+    NovelReplaceStore.instance.addListener(_handleStoresChanged);
+    NovelBookStore.instance.addListener(_handleStoresChanged);
+    NovelHistoryStore.instance.add(novel);
     _scrollController = ScrollController(keepScrollOffset: false);
     _autoScrollTicker = createTicker(_handleAutoScrollTick);
     autoScrollAction = _createAutoScrollAction();
-    if (novel.seriesId != null) {
+    if (hasChapters) {
       chaptersAction = TitleBarAction(
         MdIcons.format_list_bulleted,
         "Chapters".tl,
@@ -249,16 +263,17 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
       controller.addAction(autoScrollAction!);
       controller.addAction(settingsAction!);
     });
-    if (novel.seriesId != null) {
+    if (customBook == null && novel.seriesId != null) {
       loadSeries();
     }
   }
 
   @override
   void dispose() {
+    NovelReplaceStore.instance.removeListener(_handleStoresChanged);
+    NovelBookStore.instance.removeListener(_handleStoresChanged);
     _saveProgress();
     WidgetsBinding.instance.removeObserver(this);
-    NovelReplaceStore.instance.removeListener(_handleReplacementsChanged);
     _resumePromptTimer?.cancel();
     _scrollGeneration++;
     _stopAutoScroll(updateAction: false);
@@ -278,7 +293,7 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
     super.dispose();
   }
 
-  void _handleReplacementsChanged() {
+  void _handleStoresChanged() {
     if (mounted) setState(() {});
   }
 
@@ -489,6 +504,7 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
     _stopAutoScroll();
     _scrollGeneration++;
     _resumePromptTimer?.cancel();
+    NovelHistoryStore.instance.add(target);
     setState(() {
       novel = target;
       translatedContent = null;
@@ -523,11 +539,11 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
       Navigator.of(context).pop();
       return;
     }
-    if (seriesNovels == null) {
+    if (chapters == null) {
       await loadSeries();
       if (!mounted) return;
     }
-    final list = seriesNovels;
+    final list = chapters;
     if (list == null) {
       context.showToast(message: "Failed to load chapters".tl);
       return;
@@ -647,8 +663,11 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
       offset: anchor.offset,
       progress: _progress.value,
     ));
+    final custom = customBook;
     final seriesId = novel.seriesId;
-    if (seriesId != null) {
+    if (custom != null) {
+      NovelBookStore.instance.setLastRead(custom.id, novel.id);
+    } else if (seriesId != null) {
       final index = seriesNovels?.indexWhere((n) => n.id == novel.id) ?? -1;
       NovelProgressStore.instance.saveSeries(NovelSeriesProgress(
         seriesId: seriesId,
@@ -956,13 +975,14 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
     );
   }
 
-  /// The series and chapter, title and a divider above the text.
+  /// The series or book and chapter, title and a divider above the text.
   Widget buildHeader(BuildContext context, double fontSizeAdd) {
     final parts = <String>[];
-    if (novel.seriesTitle != null && novel.seriesTitle!.trim().isNotEmpty) {
-      parts.add(novel.seriesTitle!.trim());
+    final bookTitle = (customBook?.title ?? novel.seriesTitle)?.trim();
+    if (bookTitle != null && bookTitle.isNotEmpty) {
+      parts.add(bookTitle);
     }
-    final list = seriesNovels;
+    final list = chapters;
     final index = list?.indexWhere((n) => n.id == novel.id) ?? -1;
     if (index >= 0) {
       parts.add("Chapter @n of @total"
@@ -974,7 +994,7 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (novel.seriesId != null)
+        if (hasChapters)
           MouseRegion(
             cursor: SystemMouseCursors.click,
             child: GestureDetector(
@@ -1035,10 +1055,11 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
 
   /// The previous / chapter-list / next bar shown at the end of a chapter.
   Widget buildChapterNav(BuildContext context) {
-    if (novel.seriesId == null) {
+    if (!hasChapters) {
       return const SizedBox.shrink();
     }
-    if (seriesNovels == null) {
+    final list = chapters;
+    if (list == null) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 24),
         child: Center(
@@ -1054,7 +1075,6 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
         ),
       );
     }
-    final list = seriesNovels!;
     final index = list.indexWhere((n) => n.id == novel.id);
     final hasPrev = index > 0;
     final hasNext = index >= 0 && index < list.length - 1;

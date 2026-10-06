@@ -4,6 +4,7 @@ import 'package:pixes/components/segmented_button.dart';
 import 'package:pixes/components/title_bar.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/foundation/novel_book_text.dart';
+import 'package:pixes/foundation/novel_books.dart';
 import 'package:pixes/foundation/novel_replace_store.dart';
 import 'package:pixes/network/network.dart';
 import 'package:pixes/pages/novel_reading_page.dart';
@@ -149,6 +150,7 @@ class _NovelReplacePageState extends State<NovelReplacePage> {
   @override
   Widget build(BuildContext context) {
     final seriesTitle = widget.novel.seriesTitle?.trim();
+    final custom = NovelBookStore.instance.bookOf(widget.novel.id);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -167,11 +169,15 @@ class _NovelReplacePageState extends State<NovelReplacePage> {
           ),
         ),
         Text(
-          widget.novel.seriesId != null
-              ? "Applies to every chapter of the series @s"
+          custom != null
+              ? "Applies to every chapter of the book @s"
                   .tl
-                  .replaceAll("@s", seriesTitle ?? "")
-              : "Applies to this novel only".tl,
+                  .replaceAll("@s", custom.title)
+              : widget.novel.seriesId != null
+                  ? "Applies to every chapter of the series @s"
+                      .tl
+                      .replaceAll("@s", seriesTitle ?? "")
+                  : "Applies to this novel only".tl,
           style: TextStyle(
             fontSize: 13,
             color: ColorScheme.of(context).outline,

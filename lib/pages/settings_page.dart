@@ -806,6 +806,7 @@ class _SetInitialPageWidgetState extends State<_SetInitialPageWidget> {
     "Bookmarks",
     "Following",
     "Ranking",
+    "History",
   ];
 
   @override

@@ -1,22 +1,19 @@
 import 'package:flutter/foundation.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/foundation/log.dart';
+import 'package:pixes/foundation/novel_books.dart';
 import 'package:pixes/network/network.dart';
 import 'package:pixes/utils/novel_replace.dart';
 import 'package:sqlite3/sqlite3.dart';
 
-/// The word replacements of each book. A book is a whole series for a chapter
-/// of a series, otherwise the novel on its own.
+/// The word replacements of each book, as [novelBookKey] tells them apart.
 class NovelReplaceStore extends ChangeNotifier {
   NovelReplaceStore._();
 
   static final instance = NovelReplaceStore._();
 
   /// The book whose replacements apply to [novel].
-  static String bookOf(Novel novel) {
-    final seriesId = novel.seriesId;
-    return seriesId != null ? "series:$seriesId" : "novel:${novel.id}";
-  }
+  static String bookOf(Novel novel) => novelBookKey(novel);
 
   Database? _db;
 
@@ -86,23 +83,46 @@ class NovelReplaceStore extends ChangeNotifier {
   NovelReplaceRule add(String book, String from, String to) {
     // Load the saved ones first, or the new one would be loaded with them.
     final current = rules(book);
+    final rule = _insert(book, from, to, true);
+    _set(book, [...current, rule]);
+    return rule;
+  }
+
+  /// Adds copies of [rules] to [book], leaving out those replacing text that
+  /// [book] already replaces.
+  void addAll(String book, Iterable<NovelReplaceRule> rules) {
+    final current = this.rules(book);
+    final taken = {for (final rule in current) rule.from};
+    final added = [
+      for (final rule in rules)
+        if (taken.add(rule.from))
+          _insert(book, rule.from, rule.to, rule.enabled),
+    ];
+    if (added.isNotEmpty) _set(book, [...current, ...added]);
+  }
+
+  NovelReplaceRule _insert(String book, String from, String to, bool enabled) {
     int? id;
     try {
       final db = _database;
       if (db != null) {
         db.execute(
-          "insert into replace_rules (book, from_text, to_text, enabled, time) values (?, ?, ?, 1, ?)",
-          [book, from, to, DateTime.now().millisecondsSinceEpoch],
+          "insert into replace_rules (book, from_text, to_text, enabled, time) values (?, ?, ?, ?, ?)",
+          [
+            book,
+            from,
+            to,
+            enabled ? 1 : 0,
+            DateTime.now().millisecondsSinceEpoch
+          ],
         );
         id = db.lastInsertRowId;
       }
     } catch (e) {
       Log.warning("Novel Replace", "Failed to save replacement: $e");
     }
-    id ??= _memoryId--;
-    final rule = NovelReplaceRule(id: id, from: from, to: to);
-    _set(book, [...current, rule]);
-    return rule;
+    return NovelReplaceRule(
+        id: id ?? _memoryId--, from: from, to: to, enabled: enabled);
   }
 
   void update(String book, NovelReplaceRule rule) {
@@ -135,6 +155,16 @@ class NovelReplaceStore extends ChangeNotifier {
       for (final r in rules(book))
         if (r.id != rule.id) r,
     ]);
+  }
+
+  /// Deletes every replacement of [book].
+  void removeBook(String book) {
+    try {
+      _database?.execute("delete from replace_rules where book = ?", [book]);
+    } catch (e) {
+      Log.warning("Novel Replace", "Failed to delete replacements: $e");
+    }
+    _set(book, const []);
   }
 
   void _set(String book, List<NovelReplaceRule> rules) {

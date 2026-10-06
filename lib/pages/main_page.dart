@@ -14,6 +14,7 @@ import "package:pixes/pages/downloaded_page.dart";
 import "package:pixes/pages/following_artworks.dart";
 import "package:pixes/pages/following_novels_page.dart";
 import "package:pixes/pages/history.dart";
+import "package:pixes/pages/novel_history_page.dart";
 import "package:pixes/pages/novel_bookmarks_page.dart";
 import "package:pixes/pages/novel_ranking_page.dart";
 import "package:pixes/pages/novel_recommendation_page.dart";
@@ -295,6 +296,13 @@ class _MainPageState extends State<MainPage> with WindowListener {
               body: const SizedBox.shrink(),
               onTap: _onPaneItemTap,
             ),
+            // Last of the pages, so the saved initial page stays the same.
+            PaneItem(
+              icon: const _PaneIcon(MdIcons.history),
+              title: Text('History'.tl),
+              body: const SizedBox.shrink(),
+              onTap: _onPaneItemTap,
+            ),
             PaneItemSeparator(),
             PaneItemAction(
               icon: const _PaneIcon(MdIcons.settings_outlined),
@@ -357,6 +365,7 @@ class _MainPageState extends State<MainPage> with WindowListener {
     () => const NovelBookmarksPage(),
     () => const FollowingNovelsPage(),
     () => const NovelRankingPage(),
+    () => const NovelHistoryPage(),
   ];
 
   /// Switches the sidebar page. Pages stay alive, so switching back does not

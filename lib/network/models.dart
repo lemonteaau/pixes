@@ -561,6 +561,36 @@ class Novel {
         totalViews = json["total_view"],
         commentsCount = json["total_comments"],
         isAi = json["novel_ai_type"] == 2;
+
+  /// The novel as pixiv sends it, as far as [Novel.fromJson] reads it.
+  Map<String, dynamic> toJson() => {
+        "id": id,
+        "title": title,
+        "caption": caption,
+        "is_original": isOriginal,
+        "image_urls": {"large": image},
+        "create_date": createDate.toIso8601String(),
+        "tags": [
+          for (final tag in tags)
+            {"name": tag.name, "translated_name": tag.translatedName},
+        ],
+        "page_count": pages,
+        "text_length": length,
+        "user": {
+          "id": author.id,
+          "name": author.name,
+          "account": author.account,
+          "profile_image_urls": {"medium": author.avatar},
+          "is_followed": author.isFollowed,
+        },
+        "series":
+            seriesId == null ? null : {"id": seriesId, "title": seriesTitle},
+        "is_bookmarked": isBookmarked,
+        "total_bookmarks": totalBookmarks,
+        "total_view": totalViews,
+        "total_comments": commentsCount,
+        "novel_ai_type": isAi ? 2 : 1,
+      };
 }
 
 class MuteList {

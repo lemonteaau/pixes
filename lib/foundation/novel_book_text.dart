@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:pixes/foundation/novel_books.dart';
 import 'package:pixes/network/network.dart';
 import 'package:pixes/utils/novel_markup.dart';
 
@@ -14,8 +15,8 @@ class NovelBookChapter {
   final List<NovelBlock> blocks;
 }
 
-/// Loads the text of every chapter of the book [novel] belongs to: its whole
-/// series, or just the novel if it isn't part of one.
+/// Loads the text of every chapter of the book [novel] belongs to: the book
+/// the user put it in, or else its whole series, or else just the novel.
 class NovelBookText extends ChangeNotifier {
   NovelBookText(this.novel);
 
@@ -75,7 +76,10 @@ class NovelBookText extends ChangeNotifier {
     notifyListeners();
     if (_novels == null) {
       final seriesId = novel.seriesId;
-      if (seriesId == null) {
+      final custom = NovelBookStore.instance.bookOf(novel.id);
+      if (custom != null) {
+        _novels = custom.chapters;
+      } else if (seriesId == null) {
         _novels = [novel];
       } else {
         final res = await Network().getAllNovelSeries(seriesId.toString());

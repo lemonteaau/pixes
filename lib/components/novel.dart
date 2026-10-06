@@ -6,6 +6,7 @@ import 'package:pixes/components/animated_image.dart';
 import 'package:pixes/components/md.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/foundation/image_provider.dart';
+import 'package:pixes/foundation/novel_books.dart';
 import 'package:pixes/network/network.dart';
 import 'package:pixes/pages/novel_page.dart';
 import 'package:pixes/utils/translation.dart';
@@ -72,20 +73,32 @@ class NovelBadge extends StatelessWidget {
   }
 }
 
-/// Badges for the AI generation and series of [novel].
+/// Badges for the AI generation, series and book of [novel].
 List<Widget> buildNovelBadges(BuildContext context, Novel novel,
-    {bool showSeries = true}) {
+    {bool showSeries = true, bool showBook = true}) {
   return [
     if (novel.isAi)
       NovelBadge("AI", color: ColorScheme.of(context).tertiaryContainer),
     if (showSeries && novel.seriesId != null) NovelBadge("Series".tl),
+    if (showBook && NovelBookStore.instance.bookOf(novel.id) != null)
+      NovelBadge("Book".tl, color: ColorScheme.of(context).primaryContainer),
   ];
 }
 
 class NovelWidget extends StatefulWidget {
-  const NovelWidget(this.novel, {super.key});
+  const NovelWidget(this.novel,
+      {this.onTap, this.onLongPress, this.selected, super.key});
 
   final Novel novel;
+
+  /// Opens the novel's page if not given.
+  final VoidCallback? onTap;
+
+  final VoidCallback? onLongPress;
+
+  /// Whether the novel is selected, while novels are being selected. Null
+  /// otherwise.
+  final bool? selected;
 
   @override
   State<NovelWidget> createState() => _NovelWidgetState();
@@ -96,11 +109,14 @@ class _NovelWidgetState extends State<NovelWidget> {
   Widget build(BuildContext context) {
     final novel = widget.novel;
     final badges = buildNovelBadges(context, novel);
+    final selected = widget.selected;
     return HoverButton(
       cursor: SystemMouseCursors.click,
-      onPressed: () {
-        context.to(() => NovelPage(novel));
-      },
+      onPressed: widget.onTap ??
+          () {
+            context.to(() => NovelPage(novel));
+          },
+      onLongPress: widget.onLongPress,
       builder: (context, states) {
         final theme = FluentTheme.of(context);
         final overlay = states.isPressed
@@ -110,7 +126,15 @@ class _NovelWidgetState extends State<NovelWidget> {
                 : Colors.transparent;
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          backgroundColor: Color.alphaBlend(overlay, theme.cardColor),
+          backgroundColor: Color.alphaBlend(
+              overlay,
+              selected == true
+                  ? Color.alphaBlend(
+                      ColorScheme.of(context).primaryContainer.toOpacity(0.5),
+                      theme.cardColor)
+                  : theme.cardColor),
+          borderColor:
+              selected == true ? ColorScheme.of(context).primary : null,
           child: Row(
             children: [
               Container(
@@ -121,12 +145,23 @@ class _NovelWidgetState extends State<NovelWidget> {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: AnimatedImage(
-                  fit: BoxFit.cover,
-                  filterQuality: FilterQuality.medium,
-                  width: double.infinity,
-                  height: double.infinity,
-                  image: CachedImageProvider(novel.image),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    AnimatedImage(
+                      fit: BoxFit.cover,
+                      filterQuality: FilterQuality.medium,
+                      width: double.infinity,
+                      height: double.infinity,
+                      image: CachedImageProvider(novel.image),
+                    ),
+                    if (selected != null)
+                      Positioned(
+                        top: 6,
+                        left: 6,
+                        child: _SelectionMark(selected),
+                      ),
+                  ],
                 ),
               ),
               const SizedBox(
@@ -210,6 +245,31 @@ class _NovelWidgetState extends State<NovelWidget> {
           style: TextStyle(fontSize: 12, color: outline),
         ),
       ],
+    );
+  }
+}
+
+/// A round check mark showing whether an item is selected.
+class _SelectionMark extends StatelessWidget {
+  const _SelectionMark(this.selected);
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = ColorScheme.of(context).primary;
+    return Container(
+      width: 22,
+      height: 22,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: selected ? primary : Colors.black.toOpacity(0.32),
+        border: Border.all(color: Colors.white, width: 1.5),
+      ),
+      child: selected
+          ? Icon(MdIcons.check,
+              size: 14, color: ColorScheme.of(context).onPrimary)
+          : null,
     );
   }
 }
