@@ -1,5 +1,12 @@
 part of "network.dart";
 
+/// Image URLs from the novel pages loaded so far, by `novelId/imageId`.
+final _novelImageUrls = <String, String>{};
+
+/// Illustration URLs from the novel pages loaded so far, by
+/// `novelId/illustId` or `novelId/illustId-page`.
+final _novelIllustUrls = <String, String>{};
+
 extension NovelExt on Network {
   Future<Res<List<Novel>>> getRecommendNovels() {
     return getNovelsWithNextUrl("/v1/novel/recommended");
@@ -88,12 +95,49 @@ extension NovelExt on Network {
         }
       }
       var json = jsonDecode(html.substring(start, end));
+      _rememberNovelImages(id, json);
       return Res(json['text']);
     } catch (e, s) {
       Log.error(
           "Data Convert", "Failed to analyze html novel content: \n$e\n$s");
       return Res.error(e);
     }
+  }
+
+  /// Remembers the image URLs the novel page comes with. `images` holds the
+  /// `[uploadedimage:id]` images by id, `illusts` the `[pixivimage:...]`
+  /// illustrations by what is inside the tag. Both are `[]` when empty.
+  void _rememberNovelImages(String novelId, dynamic json) {
+    final images = json['images'];
+    if (images is Map) {
+      for (final entry in images.entries) {
+        final urls = entry.value is Map ? entry.value['urls'] : null;
+        if (urls is! Map) continue;
+        final url = urls['original'] ?? urls['1200x1200'] ?? urls['480mw'];
+        if (url is String && url.isNotEmpty) {
+          _novelImageUrls["$novelId/${entry.key}"] = url;
+        }
+      }
+    }
+    final illusts = json['illusts'];
+    if (illusts is Map) {
+      for (final entry in illusts.entries) {
+        final illust = entry.value is Map ? entry.value['illust'] : null;
+        final urls = illust is Map ? illust['images'] : null;
+        if (urls is! Map) continue;
+        final url = urls['original'] ?? urls['medium'] ?? urls['small'];
+        if (url is String && url.isNotEmpty) {
+          _novelIllustUrls["$novelId/${entry.key}"] = url;
+        }
+      }
+    }
+  }
+
+  /// The URL of `[pixivimage:illustId]` or `[pixivimage:illustId-page]`
+  /// in the novel, if its page had one. [page] is zero based.
+  String? novelIllustUrl(String novelId, String illustId, int page) {
+    return _novelIllustUrls["$novelId/$illustId-${page + 1}"] ??
+        (page == 0 ? _novelIllustUrls["$novelId/$illustId"] : null);
   }
 
   Future<Res<List<Novel>>> relatedNovels(String id) async {

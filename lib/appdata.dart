@@ -29,6 +29,8 @@ class _Appdata {
     "readingParagraphSpacing": 8.0,
     "readingAutoScrollSpeed": 40.0,
     "readingKeepScreenOnDuringAutoScroll": true,
+    "readingAutoNextChapter": true,
+    "readingAutoNextChapterDelay": 5,
     "slideshowWaitForImageLoad": true,
     "slideshowShowThumbnailWhileLoading": true,
     "blockTags": [],

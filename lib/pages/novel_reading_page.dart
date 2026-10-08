@@ -34,6 +34,10 @@ const double _minAutoScrollSpeed = 10.0;
 const double _maxAutoScrollSpeed = 100.0;
 const double _defaultAutoScrollSpeed = 40.0;
 
+const int _minNextChapterDelay = 1;
+const int _maxNextChapterDelay = 30;
+const int _defaultNextChapterDelay = 5;
+
 /// The widest the text gets, so lines stay readable on wide windows.
 const double _maxContentWidth = 720.0;
 
@@ -44,6 +48,16 @@ double _getAutoScrollSpeed() {
       .toDouble()
       .clamp(_minAutoScrollSpeed, _maxAutoScrollSpeed)
       .toDouble();
+}
+
+bool _getAutoNextChapter() =>
+    appdata.settings["readingAutoNextChapter"] != false;
+
+/// Seconds to wait at the end of a chapter before auto scroll moves on.
+int _getNextChapterDelay() {
+  final value = appdata.settings["readingAutoNextChapterDelay"];
+  if (value is! num) return _defaultNextChapterDelay;
+  return value.round().clamp(_minNextChapterDelay, _maxNextChapterDelay);
 }
 
 /// Where a reader item is: [offset] pixels into the item at [index], which
@@ -111,6 +125,22 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
   Duration? _lastAutoScrollTick;
 
   bool _isAutoScrolling = false;
+
+  /// Whether the user is reading with auto scroll, from starting it until
+  /// closing its controls. Auto scroll can be paused in between; a tap then
+  /// shows or hides its controls.
+  bool _autoReadMode = false;
+
+  /// The chapter auto scroll moves on to once the countdown runs out.
+  Novel? _nextChapter;
+
+  /// Seconds left before moving on to [_nextChapter].
+  int _nextChapterCountdown = 0;
+
+  Timer? _nextChapterTimer;
+
+  /// Whether to start auto scroll once the chapter being loaded is shown.
+  bool _autoScrollOnLoad = false;
 
   bool _isScreenAwake = false;
 
@@ -275,7 +305,10 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
     _saveProgress();
     WidgetsBinding.instance.removeObserver(this);
     _resumePromptTimer?.cancel();
+    _nextChapterTimer?.cancel();
     _scrollGeneration++;
+    _nextChapter = null;
+    _autoScrollOnLoad = false;
     _stopAutoScroll(updateAction: false);
     _autoScrollTicker.dispose();
     _scrollController.dispose();
@@ -325,7 +358,7 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
   void _toggleAutoScroll() {
     if (!mounted) return;
     if (_isAutoScrolling) {
-      _stopAutoScroll();
+      _pauseAutoScroll();
       return;
     }
     if (ModalRoute.of(context)?.isCurrent != true) return;
@@ -335,11 +368,17 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
   void _startAutoScroll() {
     if (!_scrollController.hasClients) return;
     final position = _scrollController.position;
-    if (!position.hasContentDimensions ||
-        position.pixels >= position.maxScrollExtent - 0.5) {
+    if (!position.hasContentDimensions) return;
+    _hideFloatingBars();
+    _autoReadMode = true;
+    if (position.pixels >= position.maxScrollExtent - 0.5) {
+      _handleChapterEnd();
       return;
     }
-    _hideFloatingBars();
+    _runAutoScroll();
+  }
+
+  void _runAutoScroll() {
     _scrollGeneration++;
     _isAutoScrolling = true;
     _syncScreenAwake();
@@ -359,11 +398,31 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
     }
   }
 
+  /// Stops auto scroll and shows its controls, so it can be continued.
+  void _pauseAutoScroll() {
+    _stopAutoScroll();
+    _hideFloatingBars();
+    if (!mounted || !_autoReadMode) return;
+    setState(() {
+      _showAutoScrollBar = true;
+    });
+  }
+
+  /// Stops auto scroll and hides everything that belongs to it.
+  void _exitAutoRead() {
+    _autoReadMode = false;
+    _autoScrollOnLoad = false;
+    _stopAutoScroll();
+    _hideFloatingBars();
+  }
+
   bool get _keepScreenOnDuringAutoScroll =>
       appdata.settings["readingKeepScreenOnDuringAutoScroll"] != false;
 
   void _syncScreenAwake() {
-    final shouldKeepAwake = _isAutoScrolling && _keepScreenOnDuringAutoScroll;
+    final autoReading =
+        _isAutoScrolling || _nextChapter != null || _autoScrollOnLoad;
+    final shouldKeepAwake = autoReading && _keepScreenOnDuringAutoScroll;
     if (_isScreenAwake == shouldKeepAwake) return;
     _isScreenAwake = shouldKeepAwake;
     ScreenAwake.setEnabled(shouldKeepAwake);
@@ -388,6 +447,7 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
     }
     if (position.pixels >= position.maxScrollExtent - 0.5) {
       _stopAutoScroll();
+      _handleChapterEnd();
       return;
     }
 
@@ -405,7 +465,68 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
     position.jumpTo(nextOffset);
     if (nextOffset >= position.maxScrollExtent - 0.5) {
       _stopAutoScroll();
+      _handleChapterEnd();
     }
+  }
+
+  /// Auto scroll reached the end of the chapter: count down to the next
+  /// one, or stop if there is none.
+  Future<void> _handleChapterEnd() async {
+    final current = novel;
+    if (!_getAutoNextChapter() || !hasChapters) {
+      _exitAutoRead();
+      return;
+    }
+    if (chapters == null) {
+      await loadSeries();
+    }
+    // Leave it be if the user did something else in the meantime.
+    if (!mounted ||
+        !_autoReadMode ||
+        _isAutoScrolling ||
+        _showAutoScrollBar ||
+        !identical(current, novel)) {
+      return;
+    }
+    final list = chapters;
+    final index = list?.indexWhere((n) => n.id == current.id) ?? -1;
+    if (list == null || index < 0 || index >= list.length - 1) {
+      _exitAutoRead();
+      if (list != null && index >= 0) {
+        context.showToast(message: "This is the last chapter".tl);
+      }
+      return;
+    }
+    _startNextChapterCountdown(list[index + 1]);
+  }
+
+  void _startNextChapterCountdown(Novel next) {
+    _nextChapterTimer?.cancel();
+    setState(() {
+      _nextChapter = next;
+      _nextChapterCountdown = _getNextChapterDelay();
+      _showAutoScrollBar = false;
+    });
+    _syncScreenAwake();
+    _nextChapterTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+      } else if (_nextChapterCountdown <= 1) {
+        _goToNextChapter();
+      } else {
+        setState(() {
+          _nextChapterCountdown--;
+        });
+      }
+    });
+  }
+
+  void _goToNextChapter() {
+    final next = _nextChapter;
+    if (next == null) return;
+    _nextChapterTimer?.cancel();
+    _nextChapter = null;
+    goToNovel(next, autoScroll: true);
   }
 
   void _changeAutoScrollSpeed(double delta) {
@@ -419,11 +540,19 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
 
   void _hideFloatingBars() {
     _resumePromptTimer?.cancel();
-    if (!mounted || (!_showAutoScrollBar && _resumePrompt == null)) return;
+    _nextChapterTimer?.cancel();
+    if (!mounted ||
+        (!_showAutoScrollBar &&
+            _resumePrompt == null &&
+            _nextChapter == null)) {
+      return;
+    }
     setState(() {
       _showAutoScrollBar = false;
       _resumePrompt = null;
+      _nextChapter = null;
     });
+    _syncScreenAwake();
   }
 
   void _handlePointerDown(PointerDownEvent event) {
@@ -460,17 +589,16 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
     _tapDownPosition = null;
   }
 
-  /// A tap pauses auto scrolling and shows its controls; another tap hides
-  /// them. Scrolling by hand doesn't count as a tap.
+  /// While reading with auto scroll, a tap pauses it and shows its
+  /// controls; once paused, taps show and hide them. Scrolling by hand
+  /// doesn't count as a tap.
   void _handleTap() {
-    if (_isAutoScrolling) {
-      _stopAutoScroll();
+    if (!_autoReadMode) return;
+    if (_isAutoScrolling || _nextChapter != null) {
+      _pauseAutoScroll();
+    } else {
       setState(() {
-        _showAutoScrollBar = true;
-      });
-    } else if (_showAutoScrollBar) {
-      setState(() {
-        _showAutoScrollBar = false;
+        _showAutoScrollBar = !_showAutoScrollBar;
       });
     }
   }
@@ -497,14 +625,18 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
     });
   }
 
-  /// Switches the reader to [target] and reloads its content.
-  void goToNovel(Novel target) {
+  /// Switches the reader to [target] and reloads its content. With
+  /// [autoScroll], auto scroll carries on in [target].
+  void goToNovel(Novel target, {bool autoScroll = false}) {
     if (target.id == novel.id || isLoading) return;
     _saveProgress();
     _stopAutoScroll();
     _scrollGeneration++;
     _resumePromptTimer?.cancel();
     NovelHistoryStore.instance.add(target);
+    _nextChapterTimer?.cancel();
+    _autoReadMode = autoScroll;
+    _autoScrollOnLoad = autoScroll;
     setState(() {
       novel = target;
       translatedContent = null;
@@ -513,7 +645,9 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
       data = null;
       _showAutoScrollBar = false;
       _resumePrompt = null;
+      _nextChapter = null;
     });
+    _syncScreenAwake();
     _positionTouched = false;
     _lastAnchor = null;
     _progress.value = 0;
@@ -528,6 +662,11 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
           error = value.errorMessage!;
         }
       });
+      if (value.error && _autoScrollOnLoad) {
+        _autoScrollOnLoad = false;
+        _autoReadMode = false;
+        _syncScreenAwake();
+      }
     });
   }
 
@@ -710,6 +849,13 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
       _schedulePositionUpdate(save: save);
     } else if (notification is ScrollEndNotification) {
       _schedulePositionUpdate();
+    } else if (notification is UserScrollNotification &&
+        notification.direction != ScrollDirection.idle &&
+        _nextChapter != null) {
+      // Scrolling back from the end: keep auto scrolling from wherever the
+      // user stops, or count down again if that's still the end.
+      _hideFloatingBars();
+      _runAutoScroll();
     }
     return false;
   }
@@ -768,6 +914,14 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
 
   void _handleInitialPosition() {
     _updateReadingPosition();
+    if (_autoScrollOnLoad) {
+      // Moved on by auto scroll: read the new chapter from the top.
+      _autoScrollOnLoad = false;
+      _resumeOnOpen = false;
+      _startAutoScroll();
+      _syncScreenAwake();
+      return;
+    }
     final resume = _resumeOnOpen;
     _resumeOnOpen = false;
     final initialBlock = _initialBlock;
@@ -877,9 +1031,11 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
               duration: const Duration(milliseconds: 200),
               child: _resumePrompt != null
                   ? buildResumePrompt(_resumePrompt!)
-                  : _showAutoScrollBar
-                      ? buildAutoScrollBar()
-                      : const SizedBox.shrink(),
+                  : _nextChapter != null
+                      ? buildNextChapterPrompt(_nextChapter!)
+                      : _showAutoScrollBar
+                          ? buildAutoScrollBar()
+                          : const SizedBox.shrink(),
             ),
           ),
         ],
@@ -963,12 +1119,57 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
           ),
           const SizedBox(width: 4),
           IconButton(
+            key: const ValueKey("novel-auto-scroll-close"),
             icon: const Icon(MdIcons.close, size: 16),
-            onPressed: () {
-              setState(() {
-                _showAutoScrollBar = false;
-              });
-            },
+            onPressed: _exitAutoRead,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildNextChapterPrompt(Novel next) {
+    return Center(
+      key: const ValueKey("next-chapter-prompt"),
+      child: _FloatingBar(
+        children: [
+          const Icon(MdIcons.skip_next, size: 18),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Next chapter in @s s"
+                      .tl
+                      .replaceAll("@s", "$_nextChapterCountdown"),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  next.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: ColorScheme.of(context).outline,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          FilledButton(
+            key: const ValueKey("novel-next-chapter-now"),
+            onPressed: _goToNextChapter,
+            child: Text("Go Now".tl),
+          ),
+          const SizedBox(width: 4),
+          Button(
+            key: const ValueKey("novel-next-chapter-cancel"),
+            onPressed: _exitAutoRead,
+            child: Text("Cancel".tl),
           ),
         ],
       ),
@@ -1049,7 +1250,7 @@ class _NovelReadingPageState extends LoadingState<NovelReadingPage, String>
           },
         ).paddingVertical(8),
       NovelIllustBlock(:final illustId, :final page) =>
-        _NovelIllust(illustId, page).paddingVertical(8),
+        _NovelIllust(novel.id.toString(), illustId, page).paddingVertical(8),
     };
   }
 
@@ -1581,7 +1782,9 @@ class _NovelImageState extends State<_NovelImage> {
 
 /// A pixiv illustration embedded with `[pixivimage:id]`.
 class _NovelIllust extends StatefulWidget {
-  const _NovelIllust(this.illustId, this.page);
+  const _NovelIllust(this.novelId, this.illustId, this.page);
+
+  final String novelId;
 
   final String illustId;
 
@@ -1626,32 +1829,47 @@ class _NovelIllustState extends State<_NovelIllust> {
             ),
           );
         }
-        if (res.error || res.data.images.isEmpty) {
-          return Center(
-            child: Button(
-              onPressed: () {
-                openIllustById(context, widget.illustId);
+        if (res.success && res.data.images.isNotEmpty) {
+          final illust = res.data;
+          final image = illust
+              .images[widget.page.clamp(0, illust.images.length - 1).toInt()];
+          // Restricted works come back with a placeholder image.
+          if (Illust.isOriginalImageUrl(image.large)) {
+            return _NovelImage(
+              image: CachedImageProvider(image.large),
+              cacheKey: image.large,
+              onTap: () {
+                openIllust(context, illust);
               },
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(MdIcons.image_outlined, size: 18),
-                  const SizedBox(width: 8),
-                  Text("${"Illustration".tl} #${widget.illustId}"),
-                ],
-              ),
-            ),
+            );
+          }
+        }
+        // The novel page comes with its own copy of the image.
+        final url = Network()
+            .novelIllustUrl(widget.novelId, widget.illustId, widget.page);
+        if (url != null) {
+          return _NovelImage(
+            image: CachedImageProvider(url),
+            cacheKey: url,
+            onTap: () {
+              ImagePage.show([url]);
+            },
           );
         }
-        final illust = res.data;
-        final image = illust.images[
-            widget.page.clamp(0, illust.images.length - 1).toInt()];
-        return _NovelImage(
-          image: CachedImageProvider(image.large),
-          cacheKey: image.large,
-          onTap: () {
-            openIllust(context, illust);
-          },
+        return Center(
+          child: Button(
+            onPressed: () {
+              openIllustById(context, widget.illustId);
+            },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(MdIcons.image_outlined, size: 18),
+                const SizedBox(width: 8),
+                Text("${"Illustration".tl} #${widget.illustId}"),
+              ],
+            ),
+          ),
         );
       },
     );
@@ -1878,6 +2096,51 @@ class __NovelReadingSettingsState extends State<_NovelReadingSettings> {
               ),
             ),
           ).paddingHorizontal(8).paddingBottom(8),
+          Card(
+            padding: EdgeInsets.zero,
+            child: ListTile(
+              title: Text("Auto Next Chapter".tl),
+              subtitle: Text(
+                "When auto scroll reaches the end of a chapter".tl,
+                style: const TextStyle(fontSize: 12),
+              ),
+              trailing: Checkbox(
+                key: const ValueKey("novel-auto-next-chapter"),
+                checked: _getAutoNextChapter(),
+                onChanged: (value) {
+                  setState(() {
+                    appdata.settings["readingAutoNextChapter"] = value ?? true;
+                  });
+                  appdata.writeSettings();
+                },
+              ),
+            ),
+          ).paddingHorizontal(8).paddingBottom(8),
+          if (_getAutoNextChapter())
+            Card(
+              padding: EdgeInsets.zero,
+              child: ListTile(
+                title: Text("Next Chapter Delay".tl),
+                subtitle: Slider(
+                  key: const ValueKey("novel-next-chapter-delay"),
+                  value: _getNextChapterDelay().toDouble(),
+                  onChanged: (value) {
+                    setState(() {
+                      appdata.settings["readingAutoNextChapterDelay"] =
+                          value.round();
+                    });
+                  },
+                  onChangeEnd: (_) => appdata.writeSettings(),
+                  min: _minNextChapterDelay.toDouble(),
+                  max: _maxNextChapterDelay.toDouble(),
+                  divisions: _maxNextChapterDelay - _minNextChapterDelay,
+                  label:
+                      "@s s".tl.replaceAll("@s", "${_getNextChapterDelay()}"),
+                ),
+                trailing: Text(
+                    "@s s".tl.replaceAll("@s", "${_getNextChapterDelay()}")),
+              ),
+            ).paddingHorizontal(8).paddingBottom(8),
           // 深色模式
           Card(
             margin: const EdgeInsets.symmetric(horizontal: 8),

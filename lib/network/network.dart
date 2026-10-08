@@ -573,13 +573,26 @@ class Network {
   }
 
   Future<Res<String>> getNovelImage(String novelId, String imageId) async {
+    final key = "$novelId/$imageId";
+    // The novel page lists its images; load it if it hasn't been yet.
+    if (!_novelImageUrls.containsKey(key)) {
+      await getNovelContent(novelId);
+    }
+    final known = _novelImageUrls[key];
+    if (known != null) {
+      return Res(known);
+    }
     var res = await apiGetPlain(
         "/web/v1/novel/image?novel_id=$novelId&uploaded_image_id=$imageId");
     if (res.success) {
       var html = res.data;
-      int start = html.indexOf('<img src="') + 10;
-      int end = html.indexOf('"', start);
-      return Res(html.substring(start, end));
+      const marker = '<img src="';
+      int start = html.indexOf(marker);
+      int end = start < 0 ? -1 : html.indexOf('"', start + marker.length);
+      if (end < 0) {
+        return Res.error("Image not found");
+      }
+      return Res(html.substring(start + marker.length, end));
     } else {
       return Res.error(res.errorMessage);
     }
