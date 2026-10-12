@@ -502,12 +502,18 @@ class _SlideshowPageState extends State<SlideshowPage>
   Future<void> _open(Route<void> route) =>
       _whileAway(() => Navigator.of(context).push(route));
 
+  /// How many pages are open on top. One can open another, such as the
+  /// comments a commenter's page, and playback waits for all of them.
+  int _away = 0;
+
   Future<void> _whileAway(Future<void> Function() show) async {
-    _controller.setActive(false);
-    _setImmersive(false);
-    unawaited(ScreenAwake.setEnabled(false));
+    if (_away++ == 0) {
+      _controller.setActive(false);
+      _setImmersive(false);
+      unawaited(ScreenAwake.setEnabled(false));
+    }
     await show();
-    if (!mounted) return;
+    if (--_away > 0 || !mounted) return;
     _setImmersive(true);
     unawaited(ScreenAwake.setEnabled(true));
     _controller.setActive(true);
@@ -523,8 +529,10 @@ class _SlideshowPageState extends State<SlideshowPage>
   void _openAuthor(Author author) =>
       _openPage(UserInfoPage(author.id.toString()));
 
-  void _openComments(Illust illust) =>
-      _open(SideBarRoute(CommentsPage(illust.id.toString())));
+  void _openComments(Illust illust) => _open(SideBarRoute(CommentsPage(
+        illust.id.toString(),
+        onOpenUser: (id) => _openPage(UserInfoPage(id)),
+      )));
 
   /// Shows the current image in the zoomable viewer, from the downloaded
   /// file when there is one.

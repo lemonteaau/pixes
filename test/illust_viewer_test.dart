@@ -1,22 +1,26 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:dio/dio.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pixes/appdata.dart';
+import 'package:pixes/components/animated_image.dart';
 import 'package:pixes/components/keyboard.dart';
 import 'package:pixes/components/page_route.dart';
 import 'package:pixes/foundation/app.dart';
 import 'package:pixes/foundation/history.dart';
 import 'package:pixes/foundation/slideshow/slideshow_controller.dart';
-import 'package:pixes/network/models.dart';
-import 'package:pixes/network/res.dart';
+import 'package:pixes/network/network.dart';
+import 'package:pixes/pages/comments_page.dart';
 import 'package:pixes/pages/illust_page.dart';
 import 'package:pixes/pages/illust_viewer.dart';
 import 'package:pixes/pages/slideshow_page.dart';
+import 'package:pixes/pages/user_info_page.dart';
 import 'package:pixes/utils/translation.dart';
 
 import 'slideshow_gestures_test.dart' show settlePaging;
@@ -74,8 +78,9 @@ void main() {
 
   Future<SlideshowController<ui.Image>> showViewer(WidgetTester tester,
       {int? initialIllustId,
+      bool playing = false,
       Future<Res<bool>> Function(Illust, bool)? bookmark}) async {
-    final controller = newController(tester);
+    final controller = newController(tester)..playing = playing;
     await tester.pumpWidget(FluentApp(
       home: SlideshowPage(
         illusts: const [],
@@ -224,6 +229,52 @@ void main() {
     expect(find.text('player'), findsOneWidget);
   });
 
+  testWidgets('a commenter opened from the player gets a back button too',
+      (tester) async {
+    Network().dio.httpClientAdapter = _CommentsAdapter();
+    addTearDown(() => Network.instance = null);
+    // Pictures can't be loaded in tests, and the avatars report it.
+    final onError = FlutterError.onError;
+    FlutterError.onError = (details) {
+      if (details.library != 'image resource service') onError?.call(details);
+    };
+
+    final controller = await showViewer(tester, playing: true);
+    await tester.tap(find.text('评论'));
+    await tester.pumpAndSettle();
+    expect(find.text('Nice work'), findsOneWidget);
+    expect(controller.countdownRunning, isFalse);
+
+    await tester.tap(find.descendant(
+        of: find.byType(CommentsPage), matching: find.byType(AnimatedImage)));
+    await tester.pumpAndSettle();
+    final user = find.byType(UserInfoPage);
+    // The commenter, not the user whose id happens to be the comment's.
+    expect(tester.widget<UserInfoPage>(user).id, '77');
+    expect(find.ancestor(of: user, matching: find.byType(ViewerSubpageFrame)),
+        findsOneWidget);
+
+    // Back to the comments, which still keep the player waiting.
+    await tester.tap(find.byKey(const ValueKey('viewer-subpage-back')));
+    await tester.pumpAndSettle();
+    expect(user, findsNothing);
+    expect(find.text('Nice work'), findsOneWidget);
+    expect(controller.countdownRunning, isFalse);
+    expect(controller.currentIndex, 0);
+
+    // Closing them lets it play on. It keeps drawing frames while it plays,
+    // so this can't wait for them to settle.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(CommentsPage), findsNothing);
+    expect(controller.currentIndex, 0);
+    expect(controller.countdownRunning, isTrue);
+    FlutterError.onError = onError;
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 31));
+  });
+
   testWidgets('opening from a feed uses the player unless the classic one is on',
       (tester) async {
     appdata.account = Account(
@@ -281,4 +332,45 @@ class _Observer extends NavigatorObserver {
   final List<Route> pushed;
   @override
   void didPush(Route route, Route? previousRoute) => pushed.add(route);
+}
+
+/// Serves one comment by user 77 and fails everything else, so the pages
+/// opened from it stop at their error message.
+class _CommentsAdapter implements HttpClientAdapter {
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    final found = options.uri.path == '/v3/illust/comments';
+    return ResponseBody.fromString(
+      jsonEncode(found
+          ? {
+              'comments': [
+                {
+                  'id': 900,
+                  'comment': 'Nice work',
+                  'date': '2026-09-22T00:00:00Z',
+                  'user': {
+                    'id': 77,
+                    'name': 'Commenter',
+                    'profile_image_urls': {'medium': ''},
+                  },
+                },
+              ],
+              'next_url': null,
+            }
+          : {
+              'error': {'message': 'Not found'},
+            }),
+      found ? 200 : 404,
+      headers: {
+        Headers.contentTypeHeader: ['application/json'],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
 }

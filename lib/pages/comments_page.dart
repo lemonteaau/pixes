@@ -12,11 +12,17 @@ import '../components/md.dart';
 import '../components/message.dart';
 
 class CommentsPage extends StatefulWidget {
-  const CommentsPage(this.id, {this.isNovel = false, super.key});
+  const CommentsPage(this.id,
+      {this.isNovel = false, this.onOpenUser, super.key});
 
   final String id;
 
   final bool isNovel;
+
+  /// Opens the page of the user with the given id. Set where the comments
+  /// aren't under a title bar with a back button, such as over the
+  /// full-screen player; otherwise the page opens in the navigator around.
+  final void Function(String id)? onOpenUser;
 
   static void show(BuildContext context, String id, {bool isNovel = false}) {
     Navigator.of(context)
@@ -78,8 +84,7 @@ class _CommentsPageState extends MultiPageLoadingState<CommentsPage, Comment> {
                         child: ColoredBox(
                           color: ColorScheme.of(context).secondaryContainer,
                           child: GestureDetector(
-                            onTap: () => context
-                                .to(() => UserInfoPage(data[index].uid)),
+                            onTap: () => openUser(data[index].uid),
                             child: AnimatedImage(
                               image: CachedImageProvider(data[index].avatar),
                               width: 38,
@@ -137,6 +142,15 @@ class _CommentsPageState extends MultiPageLoadingState<CommentsPage, Comment> {
             ),
           );
         });
+  }
+
+  void openUser(String id) {
+    final open = widget.onOpenUser;
+    if (open != null) {
+      open(id);
+    } else {
+      context.to(() => UserInfoPage(id));
+    }
   }
 
   Widget buildBottom(BuildContext context) {
