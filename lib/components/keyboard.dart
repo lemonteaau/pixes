@@ -42,11 +42,8 @@ class KeyEventListenerState extends State<KeyEventListener> {
       onKeyEvent: (node, event) {
         if (event is! KeyUpEvent) return KeyEventResult.ignored;
         if (event.logicalKey == LogicalKeyboardKey.escape) {
-          if (App.rootNavigatorKey.currentState?.canPop() ?? false) {
-            App.rootNavigatorKey.currentState?.pop();
-          } else if (App.mainNavigatorKey?.currentState?.canPop() ?? false) {
-            App.mainNavigatorKey?.currentState?.pop();
-          }
+          // Goes back the way system back does, nested navigators included.
+          App.rootNavigatorKey.currentState?.maybePop();
           return KeyEventResult.handled;
         }
         for (var handler in _handlers) {

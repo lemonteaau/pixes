@@ -122,7 +122,7 @@ class _MainPageState extends State<MainPage> with WindowListener {
   void initState() {
     StateController.put<TitleBarController>(TitleBarController());
     windowManager.addListener(this);
-    listenMouseSideButtonToBack(navigatorKey);
+    listenMouseSideButtonToBack();
     App.mainNavigatorKey = navigatorKey;
     index = appdata.settings["initialPage"] ?? 4;
     if (pageBuilders.elementAtOrNull(index) == null) {
@@ -333,14 +333,17 @@ class _MainPageState extends State<MainPage> with WindowListener {
             child: MediaQuery.removePadding(
               context: context,
               removeTop: true,
-              child: Navigator(
-                key: navigatorKey,
-                observers: [_routeStack],
-                onGenerateRoute: (settings) => AppPageRoute(
-                  isRoot: true,
-                  builder: (context) => _RootPages(
-                    current: _currentPage,
-                    builders: pageBuilders,
+              child: NestedNavigator(
+                navigatorKey: navigatorKey,
+                child: Navigator(
+                  key: navigatorKey,
+                  observers: [_routeStack],
+                  onGenerateRoute: (settings) => AppPageRoute(
+                    isRoot: true,
+                    builder: (context) => _RootPages(
+                      current: _currentPage,
+                      builders: pageBuilders,
+                    ),
                   ),
                 ),
               ),

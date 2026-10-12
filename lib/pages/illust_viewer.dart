@@ -159,8 +159,8 @@ class _ViewerSubpageFrameState extends State<ViewerSubpageFrame> {
   @override
   Widget build(BuildContext context) {
     final theme = FluentTheme.of(context);
-    return NavigatorPopHandler(
-      onPopWithResult: (_) => _navigator.currentState?.maybePop(),
+    return NestedNavigator(
+      navigatorKey: _navigator,
       child: ColoredBox(
         color: theme.micaBackgroundColor,
         child: Column(

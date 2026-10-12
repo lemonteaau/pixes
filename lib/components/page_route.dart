@@ -11,7 +11,67 @@ const int _kMaxDroppedSwipePageForwardAnimationTime = 800;
 const int _kMaxPageBackAnimationTime = 300;
 const double _kMinFlingVelocity = 1.0;
 
-class AppPageRoute<T> extends PageRoute<T> with _AppRouteTransitionMixin {
+/// A [Navigator] shown inside a page of another navigator.
+///
+/// Every navigator has a top route of its own, so system back has to be told
+/// which one is on screen: it goes back in here while the page holding this
+/// is on top, and leaves it alone while another route covers that page.
+class NestedNavigator extends StatefulWidget {
+  const NestedNavigator(
+      {required this.navigatorKey, required this.child, super.key});
+
+  /// The key of the navigator in [child].
+  final GlobalKey<NavigatorState> navigatorKey;
+
+  final Widget child;
+
+  /// Whether no route covers the page that [navigator] is in.
+  static bool isOnScreen(NavigatorState navigator) {
+    final host = navigator.context
+        .findAncestorStateOfType<_NestedNavigatorState>()
+        ?._host;
+    if (host == null) return true;
+    final hostNavigator = host.navigator;
+    return host.isCurrent && hostNavigator != null && isOnScreen(hostNavigator);
+  }
+
+  @override
+  State<NestedNavigator> createState() => _NestedNavigatorState();
+}
+
+class _NestedNavigatorState extends State<NestedNavigator> {
+  /// The route of the page this navigator is in.
+  ModalRoute<dynamic>? _host;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _host = ModalRoute.of(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return NavigatorPopHandler(
+      onPopWithResult: (_) => widget.navigatorKey.currentState?.maybePop(),
+      child: widget.child,
+    );
+  }
+}
+
+/// Keeps a back gesture from popping the route while it is hidden under a
+/// route of another navigator.
+mixin _OnScreenPopGesture<T> on PageRoute<T> {
+  @override
+  bool get popGestureEnabled {
+    final navigator = this.navigator;
+    return navigator != null &&
+        NestedNavigator.isOnScreen(navigator) &&
+        super.popGestureEnabled;
+  }
+}
+
+class AppPageRoute<T> extends PageRoute<T>
+    with _OnScreenPopGesture<T>, _AppRouteTransitionMixin<T> {
   /// Construct a MaterialPageRoute whose contents are defined by [builder].
   AppPageRoute({
     required this.builder,
@@ -342,7 +402,7 @@ class _IOSBackGestureDetectorState extends State<IOSBackGestureDetector> {
 
 const _kSideBarWidth = 420.0;
 
-class SideBarRoute<T> extends PageRoute<T> {
+class SideBarRoute<T> extends PageRoute<T> with _OnScreenPopGesture<T> {
   SideBarRoute(this.child);
 
   final Widget child;
