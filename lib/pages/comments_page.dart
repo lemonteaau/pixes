@@ -78,8 +78,8 @@ class _CommentsPageState extends MultiPageLoadingState<CommentsPage, Comment> {
                         child: ColoredBox(
                           color: ColorScheme.of(context).secondaryContainer,
                           child: GestureDetector(
-                            onTap: () => context.to(
-                                () => UserInfoPage(data[index].id.toString())),
+                            onTap: () => context
+                                .to(() => UserInfoPage(data[index].uid)),
                             child: AnimatedImage(
                               image: CachedImageProvider(data[index].avatar),
                               width: 38,
