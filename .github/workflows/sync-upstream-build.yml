@@ -158,6 +158,8 @@ jobs:
           name: pixes-custom-Android-${{ github.run_number }}
           path: build/app/outputs/apk/release/*.apk
           if-no-files-found: error
+          # Only carries files to the release job; deleted once the release is published.
+          retention-days: 1
 
   ios:
     name: Build unsigned iOS IPA
@@ -208,6 +210,8 @@ jobs:
           name: pixes-custom-iOS-${{ github.run_number }}
           path: pixes-custom-ios-unsigned.ipa
           if-no-files-found: error
+          # Only carries files to the release job; deleted once the release is published.
+          retention-days: 1
 
   windows:
     name: Build Windows ZIP
@@ -253,6 +257,8 @@ jobs:
           name: pixes-custom-Windows-${{ github.run_number }}
           path: pixes-custom-windows-x64.zip
           if-no-files-found: error
+          # Only carries files to the release job; deleted once the release is published.
+          retention-days: 1
 
   linux:
     name: Build Linux packages (${{ matrix.arch }})
@@ -344,6 +350,8 @@ jobs:
             pixes-custom-linux-*.deb
             pixes-custom-linux-*.pkg.tar.zst
           if-no-files-found: error
+          # Only carries files to the release job; deleted once the release is published.
+          retention-days: 1
 
   macos:
     name: Build unsigned macOS DMG
@@ -407,6 +415,8 @@ jobs:
           name: pixes-custom-macOS-${{ github.run_number }}
           path: pixes-custom-macos-unsigned.dmg
           if-no-files-found: error
+          # Only carries files to the release job; deleted once the release is published.
+          retention-days: 1
 
   release:
     name: Publish custom release
@@ -455,14 +465,14 @@ jobs:
             --title "pixes $RELEASE_VERSION" \
             --notes-file "$RUNNER_TEMP/release-notes.md"
 
-      - name: Delete artifacts from older runs
+      - name: Delete build artifacts (the release has the files)
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Releases already hold every build; keep only this run's artifacts to stay under the storage quota.
+          # Every build is published as a release, so no artifact needs to be kept.
           gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
-            --jq ".artifacts[] | select(.workflow_run.id != ${GITHUB_RUN_ID}) | .id" |
+            --jq ".artifacts[].id" |
           while read -r id; do
             gh api -X DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/$id" && echo "deleted artifact $id"
           done
